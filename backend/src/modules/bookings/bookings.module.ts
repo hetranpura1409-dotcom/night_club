@@ -1,0 +1,16 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { BookingsService } from './bookings.service';
+import { BookingsController } from './bookings.controller';
+import { Booking } from '../../entities/booking.entity';
+import { Payment } from '../../entities/payment.entity';
+import { Table } from '../../entities/table.entity';
+import { StripeService } from '../../services/stripe.service';
+
+@Module({
+    imports: [TypeOrmModule.forFeature([Booking, Payment, Table])],
+    controllers: [BookingsController],
+    providers: [BookingsService, StripeService],
+    exports: [BookingsService],
+})
+export class BookingsModule { }

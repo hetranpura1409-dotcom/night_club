@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getNightclubs, getEvents, getFeaturedNightclubs, getPopularNightclubs, getGuestlistOnlyNightclubs, getUpcomingEvents } from '../../services/api';
+import { getNightclubs, getEvents, getFeaturedNightclubs, getPopularNightclubs, getGuestlistOnlyNightclubs, getUpcomingEvents, addFavorite, removeFavorite, getReviewStats } from '../../services/api';
 
 interface Nightclub {
     id: string;
@@ -36,15 +36,56 @@ export default function BrowsePage() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState('Home');
+    const [favorites, setFavorites] = useState<Set<string>>(new Set());
+    const [reviewStats, setReviewStats] = useState<Record<string, { averageRating: number; totalReviews: number }>>({});
 
     const [featuredClubs, setFeaturedClubs] = useState<Nightclub[]>([]);
     const [popularClubs, setPopularClubs] = useState<Nightclub[]>([]);
     const [guestlistClubs, setGuestlistClubs] = useState<Nightclub[]>([]);
     const [upcomingEvents, setUpcomingEvents] = useState<Event[]>([]);
     const [allClubs, setAllClubs] = useState<Nightclub[]>([]);
+    const [unreadNotifications, setUnreadNotifications] = useState(0);
 
     const filters = ['Home', 'Night Clubs', 'Events', 'Popular'];
     const defaultCity = 'Stockholm';
+
+    // Toggle favorite function
+    const toggleFavorite = async (e: React.MouseEvent, nightclubId: string) => {
+        e.stopPropagation(); // Prevent navigation to venue page
+
+        const isFavorited = favorites.has(nightclubId);
+
+        // Optimistic update
+        setFavorites(prev => {
+            const newSet = new Set(prev);
+            if (isFavorited) {
+                newSet.delete(nightclubId);
+            } else {
+                newSet.add(nightclubId);
+            }
+            return newSet;
+        });
+
+        try {
+            if (isFavorited) {
+                await removeFavorite(nightclubId);
+            } else {
+                await addFavorite(nightclubId);
+            }
+        } catch (error) {
+            console.error('Failed to toggle favorite:', error);
+            // Revert on error
+            setFavorites(prev => {
+                const newSet = new Set(prev);
+                if (isFavorited) {
+                    newSet.add(nightclubId);
+                } else {
+                    newSet.delete(nightclubId);
+                }
+                return newSet;
+            });
+        }
+    };
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -56,6 +97,11 @@ export default function BrowsePage() {
         }
 
         setUser(JSON.parse(userData));
+
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser?.id) {
+            loadNotifications(parsedUser.id);
+        }
 
         const savedImage = localStorage.getItem('profileImage');
         if (savedImage) {
@@ -81,6 +127,12 @@ export default function BrowsePage() {
             setPopularClubs(popular.length > 0 ? popular : allData.slice(0, 4));
             setGuestlistClubs(guestlist.length > 0 ? guestlist : allData.slice(0, 2));
             setUpcomingEvents(events);
+
+            // Load review stats for all clubs
+            const allClubIds = allData.map((c: Nightclub) => c.id);
+            if (allClubIds.length > 0) {
+                await loadReviewStats(allClubIds);
+            }
         } catch (error) {
             console.error('Failed to load data:', error);
         } finally {
@@ -93,6 +145,59 @@ export default function BrowsePage() {
         if (hour < 12) return 'Good Morning';
         if (hour < 17) return 'Good Afternoon';
         return 'Good Evening';
+    };
+
+    // Load review stats for all clubs
+    const loadReviewStats = async (clubIds: string[]) => {
+        try {
+            const stats: Record<string, { averageRating: number; totalReviews: number }> = {};
+            await Promise.all(
+                clubIds.map(async (id) => {
+                    try {
+                        const reviewData = await getReviewStats(id);
+                        stats[id] = {
+                            averageRating: reviewData.averageRating,
+                            totalReviews: reviewData.totalReviews,
+                        };
+                    } catch (err) {
+                        // No reviews yet
+                        stats[id] = { averageRating: 0, totalReviews: 0 };
+                    }
+                })
+            );
+            setReviewStats(stats);
+        } catch (error) {
+            console.error('Error loading review stats:', error);
+        }
+    };
+
+    // Load unread notifications count
+    const loadNotifications = async (userId: string) => {
+        try {
+            const response = await fetch(`http://localhost:3000/api/notifications/user/${userId}`);
+            const notifications = await response.json();
+            const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+            setUnreadNotifications(unreadCount);
+        } catch (error) {
+            console.error('Error loading notifications:', error);
+        }
+    };
+
+    // Get display rating (review-based or fallback to static)
+    const getDisplayRating = (clubId: string, staticRating?: number) => {
+        const stats = reviewStats[clubId];
+        if (stats && stats.totalReviews > 0) {
+            return {
+                rating: stats.averageRating,
+                count: stats.totalReviews,
+                isReviewBased: true,
+            };
+        }
+        return {
+            rating: staticRating || 0,
+            count: 0,
+            isReviewBased: false,
+        };
     };
 
     const handleLogout = () => {
@@ -187,9 +292,17 @@ export default function BrowsePage() {
                         <span className="user-name">{user?.firstName}</span>
                     </div>
                 </div>
-                <button className="logout-btn" onClick={handleLogout}>
-                    <span>Logout</span>
-                </button>
+                <div className="header-actions">
+                    <button className="notification-btn" onClick={() => router.push('/notifications')}>
+                        🔔
+                        {unreadNotifications > 0 && (
+                            <span className="notification-badge">{unreadNotifications}</span>
+                        )}
+                    </button>
+                    <button className="logout-btn" onClick={handleLogout}>
+                        <span>Logout</span>
+                    </button>
+                </div>
             </div>
 
             {/* Search Bar */}
@@ -241,6 +354,23 @@ export default function BrowsePage() {
                                 <div className="venue-info">
                                     <h3>{club.name}</h3>
                                     <p>{club.category || 'Nightclub'} • {club.location}</p>
+                                    <div className="rating-row">
+                                        {(() => {
+                                            const { rating, count, isReviewBased } = getDisplayRating(club.id, club.rating);
+                                            if (rating > 0) {
+                                                return (
+                                                    <div className="rating">
+                                                        {'★'.repeat(Math.floor(rating))}
+                                                        {'☆'.repeat(5 - Math.floor(rating))}
+                                                        {isReviewBased && count > 0 && (
+                                                            <span className="review-count"> ({count} reviews)</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+                                            return <span className="no-reviews">No reviews yet</span>;
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -275,13 +405,25 @@ export default function BrowsePage() {
                                     ) : (
                                         <div className="placeholder-image">🎵</div>
                                     )}
-                                    <button className="favorite-btn" onClick={(e) => { e.stopPropagation(); }}>♡</button>
                                 </div>
                                 <div className="venue-info">
                                     <h3>{club.name}</h3>
                                     <div className="rating">
-                                        {'★'.repeat(Math.floor(club.rating || 4))}
-                                        {'☆'.repeat(5 - Math.floor(club.rating || 4))}
+                                        {(() => {
+                                            const { rating, count, isReviewBased } = getDisplayRating(club.id, club.rating);
+                                            if (rating > 0) {
+                                                return (
+                                                    <>
+                                                        {'★'.repeat(Math.floor(rating))}
+                                                        {'☆'.repeat(5 - Math.floor(rating))}
+                                                        {isReviewBased && count > 0 && (
+                                                            <span className="review-count"> ({count})</span>
+                                                        )}
+                                                    </>
+                                                );
+                                            }
+                                            return <span className="no-reviews">No reviews yet</span>;
+                                        })()}
                                     </div>
                                     <p>{club.category || 'Nightclub'}</p>
                                 </div>
@@ -313,6 +455,78 @@ export default function BrowsePage() {
                                 <div className="venue-info">
                                     <h3>{club.name}</h3>
                                     <p>{club.category || 'Exclusive'} • {club.location}</p>
+                                    <div className="rating-row">
+                                        {(() => {
+                                            const { rating, count, isReviewBased } = getDisplayRating(club.id, club.rating);
+                                            if (rating > 0) {
+                                                return (
+                                                    <div className="rating">
+                                                        {'★'.repeat(Math.floor(rating))}
+                                                        {'☆'.repeat(5 - Math.floor(rating))}
+                                                        {isReviewBased && count > 0 && (
+                                                            <span className="review-count"> ({count} reviews)</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+                                            return <span className="no-reviews">No reviews yet</span>;
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {/* All Nightclubs */}
+            {(activeFilter === 'Home' || activeFilter === 'Night Clubs') && (
+                <section className="section">
+                    <h2 className="section-title">All nightclubs</h2>
+                    <div className="clubs-grid">
+                        {allClubs.filter(club => {
+                            if (!searchQuery.trim()) return true;
+                            const query = searchQuery.toLowerCase();
+                            return club.name.toLowerCase().includes(query) ||
+                                club.location?.toLowerCase().includes(query) ||
+                                club.category?.toLowerCase().includes(query);
+                        }).map((club) => (
+                            <div
+                                key={club.id}
+                                className="club-card"
+                                onClick={() => router.push(`/venue/${club.id}`)}
+                            >
+                                <div className="club-image">
+                                    {club.imageUrl ? (
+                                        <img src={club.imageUrl} alt={club.name} />
+                                    ) : (
+                                        <div className="placeholder-image">🎵</div>
+                                    )}
+                                </div>
+                                <div className="club-info">
+                                    <h3>{club.name}</h3>
+                                    <p className="club-location">📍 {club.location}</p>
+                                    <div className="rating-row">
+                                        {(() => {
+                                            const { rating, count, isReviewBased } = getDisplayRating(club.id, club.rating);
+                                            if (isReviewBased && count > 0) {
+                                                return (
+                                                    <>
+                                                        <span className="rating-stars">{'★'.repeat(Math.round(rating))}</span>
+                                                        <span className="review-count">({count} reviews)</span>
+                                                    </>
+                                                );
+                                            } else if (rating > 0) {
+                                                return (
+                                                    <>
+                                                        <span className="rating-stars">{'★'.repeat(Math.round(rating))}</span>
+                                                        <span className="review-count">({rating.toFixed(1)})</span>
+                                                    </>
+                                                );
+                                            }
+                                            return <span className="no-reviews">No reviews yet</span>;
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -419,6 +633,68 @@ export default function BrowsePage() {
                     font-size: 18px;
                     font-weight: 600;
                     color: white;
+                }
+
+                .header-actions {
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
+                }
+
+                .favorites-link-btn {
+                    background: linear-gradient(135deg, #ff6b9d, #ff4181);
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+
+                .favorites-link-btn span {
+                    color: white;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+
+                .favorites-link-btn:hover {
+                    transform: scale(1.05);
+                    box-shadow: 0 4px 15px rgba(255, 107, 157, 0.4);
+                }
+
+                .notification-btn {
+                    position: relative;
+                    background: transparent;
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                    color: white;
+                    padding: 10px 16px;
+                    border-radius: 20px;
+                    font-size: 18px;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    display: flex;
+                    align-items: center;
+                }
+
+                .notification-btn:hover {
+                    background: rgba(255, 107, 157, 0.1);
+                    border-color: #ff6b9d;
+                }
+
+                .notification-badge {
+                    position: absolute;
+                    top: -5px;
+                    right: -5px;
+                    background: linear-gradient(135deg, #ff6b9d, #ff4181);
+                    color: white;
+                    font-size: 11px;
+                    font-weight: bold;
+                    padding: 2px 6px;
+                    border-radius: 10px;
+                    min-width: 18px;
+                    text-align: center;
                 }
 
                 .logout-btn {
@@ -772,6 +1048,59 @@ export default function BrowsePage() {
                     color: #666;
                     text-align: center;
                     padding: 20px;
+                }
+
+                .clubs-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin-top: 20px;
+                }
+
+                .club-card {
+                    background: #1a1a1a;
+                    border-radius: 16px;
+                    overflow: hidden;
+                    cursor: pointer;
+                    transition: all 0.3s;
+                    border: 1px solid #333;
+                }
+
+                .club-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 8px 24px rgba(255, 107, 157, 0.2);
+                    border-color: #ff6b9d;
+                }
+
+                .club-image {
+                    width: 100%;
+                    height: 200px;
+                    position: relative;
+                    overflow: hidden;
+                    background: #0a0a0a;
+                }
+
+                .club-image img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+
+                .club-info {
+                    padding: 16px;
+                }
+
+                .club-info h3 {
+                    color: white;
+                    font-size: 18px;
+                    font-weight: 600;
+                    margin: 0 0 8px 0;
+                }
+
+                .club-location {
+                    color: #888;
+                    font-size: 14px;
+                    margin: 0 0 12px 0;
                 }
 
                 /* Mobile Small (320px - 480px) */

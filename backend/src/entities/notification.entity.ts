@@ -12,6 +12,9 @@ export class Notification {
     @Column()
     message: string;
 
+    @Column({ default: 'system' })
+    type: string; // 'booking' | 'event' | 'promotion' | 'system'
+
     @Column({ default: false })
     isRead: boolean;
 

@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getNightclubs, getTablesByNightclub } from '../../../services/api';
+import { getNightclubs, getTablesByNightclub, getVenueReviews, getReviewStats, submitReview, markReviewHelpful } from '../../../services/api';
+import ReviewsList from '../../../components/reviews/ReviewsList';
+import ReviewForm from '../../../components/reviews/ReviewForm';
+import StarRating from '../../../components/reviews/StarRating';
 
 interface Nightclub {
     id: string;
@@ -36,6 +39,12 @@ export default function VenuePage() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'tables' | 'tickets' | 'guestlist' | 'menu'>('tables');
 
+    // Reviews state
+    const [reviews, setReviews] = useState<any[]>([]);
+    const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } });
+    const [showReviewForm, setShowReviewForm] = useState(false);
+    const [reviewsLoading, setReviewsLoading] = useState(false);
+
     // Venue images
     const venueImages = [
         venue?.imageUrl || '',
@@ -46,6 +55,9 @@ export default function VenuePage() {
 
     useEffect(() => {
         loadVenue();
+        if (venueId) {
+            loadReviews();
+        }
     }, [venueId]);
 
     const loadVenue = async () => {
@@ -69,6 +81,52 @@ export default function VenuePage() {
             console.error('Failed to load venue:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadReviews = async () => {
+        if (!venueId) return;
+
+        try {
+            setReviewsLoading(true);
+            const [reviewsData, statsData] = await Promise.all([
+                getVenueReviews(venueId),
+                getReviewStats(venueId),
+            ]);
+            setReviews(reviewsData);
+            setReviewStats(statsData);
+        } catch (error) {
+            console.error('Failed to load reviews:', error);
+        } finally {
+            setReviewsLoading(false);
+        }
+    };
+
+    const handleSubmitReview = async (reviewData: { rating: number; title: string; comment: string; visitDate: string }) => {
+        try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            await submitReview({
+                userId: user.id || '00000000-0000-0000-0000-000000000001',
+                nightclubId: venueId,
+                ...reviewData,
+            });
+
+            // Reload reviews
+            await loadReviews();
+            setShowReviewForm(false);
+            alert('Review submitted successfully!');
+        } catch (error: any) {
+            console.error('Failed to submit review:', error);
+            alert(error.response?.data?.message || 'Failed to submit review');
+        }
+    };
+
+    const handleMarkHelpful = async (reviewId: string) => {
+        try {
+            await markReviewHelpful(reviewId);
+            await loadReviews();
+        } catch (error) {
+            console.error('Failed to mark review helpful:', error);
         }
     };
 
@@ -156,11 +214,16 @@ export default function VenuePage() {
                     <div className="header-left">
                         <h1>{venue.name}</h1>
                         <div className="rating-row">
-                            <div className="stars">
-                                {'★'.repeat(Math.floor(venue.rating || 5))}
-                                {'☆'.repeat(5 - Math.floor(venue.rating || 5))}
-                            </div>
-                            <span className="rating-count">• {venue.rating || '5.0'}</span>
+                            <StarRating
+                                rating={reviewStats.averageRating > 0 ? Math.round(reviewStats.averageRating) : Math.floor(venue.rating || 5)}
+                                readonly
+                                size="medium"
+                            />
+                            <span className="rating-count">
+                                {reviewStats.totalReviews > 0
+                                    ? `${reviewStats.averageRating.toFixed(1)} (${reviewStats.totalReviews} reviews)`
+                                    : `${venue.rating || '5.0'}`}
+                            </span>
                         </div>
                     </div>
                     <button className="favorite-btn">♡</button>
@@ -180,7 +243,9 @@ export default function VenuePage() {
                 <p className="description">{venue.description}</p>
 
                 <div className="action-buttons">
-                    <button className="btn-primary">Reserve a guest</button>
+                    <button className="btn-primary" onClick={() => router.push(`/venue/${params.id}/book`)}>
+                        🪑 Book a Table
+                    </button>
                     <button className="btn-secondary">
                         <span>📷</span> Instagram
                     </button>
@@ -330,6 +395,43 @@ export default function VenuePage() {
                         </div>
                     </div>
                 )}
+
+                {/* Reviews Section */}
+                <div className="reviews-section">
+                    <div className="reviews-header">
+                        <h2>Reviews & Ratings</h2>
+                        <button className="btn-write-review" onClick={() => setShowReviewForm(!showReviewForm)}>
+                            ✍️ Write a Review
+                        </button>
+                    </div>
+
+                    {/* Review Form */}
+                    {showReviewForm && (
+                        <div className="review-form-container">
+                            <ReviewForm
+                                nightclubId={venueId}
+                                onSubmit={handleSubmitReview}
+                                onCancel={() => setShowReviewForm(false)}
+                            />
+                        </div>
+                    )}
+
+                    {/* Reviews List */}
+                    {reviewsLoading ? (
+                        <div className="reviews-loading">
+                            <div className="spinner"></div>
+                            <p>Loading reviews...</p>
+                        </div>
+                    ) : (
+                        <ReviewsList
+                            nightclubId={venueId}
+                            reviews={reviews}
+                            stats={reviewStats}
+                            onMarkHelpful={handleMarkHelpful}
+                        />
+                    )}
+                </div>
+
             </div>
 
             <style jsx>{`

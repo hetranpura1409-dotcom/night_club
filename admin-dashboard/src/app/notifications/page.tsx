@@ -8,6 +8,7 @@ export default function NotificationsPage() {
     const [selectedUserId, setSelectedUserId] = useState('');
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
+    const [type, setType] = useState('system');
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -39,6 +40,7 @@ export default function NotificationsPage() {
                 userId: selectedUserId,
                 title,
                 message,
+                type,
             });
 
             setResult({
@@ -87,6 +89,29 @@ export default function NotificationsPage() {
                                     {user.name} ({user.mobile})
                                 </option>
                             ))}
+                        </select>
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+                            Notification Type
+                        </label>
+                        <select
+                            value={type}
+                            onChange={(e) => setType(e.target.value)}
+                            required
+                            style={{
+                                width: '100%',
+                                padding: '10px',
+                                border: '1px solid #d1d5db',
+                                borderRadius: '6px',
+                                fontSize: '14px',
+                            }}
+                        >
+                            <option value="system">⚙️ System</option>
+                            <option value="booking">🎫 Booking</option>
+                            <option value="event">🎉 Event</option>
+                            <option value="promotion">💎 Promotion</option>
                         </select>
                     </div>
 

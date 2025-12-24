@@ -86,5 +86,88 @@ export const getTablesByNightclub = async (nightclubId: string) => {
     return response.data;
 };
 
+// Booking API functions
+export const createBooking = async (bookingData: {
+    tableId: string;
+    bookingDate: string;
+    bookingTime: string;
+    numberOfGuests: number;
+    specialRequests?: string;
+}) => {
+    const response = await apiClient.post('/bookings', bookingData);
+    return response.data;
+};
+
+export const confirmBooking = async (bookingId: string) => {
+    const response = await apiClient.patch(`/bookings/${bookingId}/confirm`);
+    return response.data;
+};
+
+export const getUserBookings = async () => {
+    const response = await apiClient.get('/bookings');
+    return response.data;
+};
+
+export const getBookingById = async (bookingId: string) => {
+    const response = await apiClient.get(`/bookings/${bookingId}`);
+    return response.data;
+};
+
+export const cancelBooking = async (bookingId: string) => {
+    const response = await apiClient.patch(`/bookings/${bookingId}/cancel`);
+    return response.data;
+};
+
+// Reviews API functions
+export const submitReview = async (reviewData: {
+    userId: string;
+    nightclubId: string;
+    rating: number;
+    comment: string;
+    title?: string;
+    visitDate?: string;
+}) => {
+    const response = await apiClient.post('/reviews', reviewData);
+    return response.data;
+};
+
+export const getVenueReviews = async (nightclubId: string, sortBy?: string) => {
+    const response = await apiClient.get(`/reviews/nightclub/${nightclubId}`, {
+        params: { sortBy },
+    });
+    return response.data;
+};
+
+export const getReviewStats = async (nightclubId: string) => {
+    const response = await apiClient.get(`/reviews/stats/${nightclubId}`);
+    return response.data;
+};
+
+export const markReviewHelpful = async (reviewId: string) => {
+    const response = await apiClient.post(`/reviews/${reviewId}/helpful`);
+    return response.data;
+};
+
+// Favorites API functions
+export const addFavorite = async (nightclubId: string) => {
+    const response = await apiClient.post(`/favorites/${nightclubId}`);
+    return response.data;
+};
+
+export const removeFavorite = async (nightclubId: string) => {
+    const response = await apiClient.delete(`/favorites/${nightclubId}`);
+    return response.data;
+};
+
+export const getUserFavorites = async () => {
+    const response = await apiClient.get('/favorites');
+    return response.data;
+};
+
+export const checkFavorite = async (nightclubId: string) => {
+    const response = await apiClient.get(`/favorites/check/${nightclubId}`);
+    return response.data;
+};
+
 export default apiClient;
 

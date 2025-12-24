@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateNightclubDto {
     @IsString()
@@ -15,6 +15,5 @@ export class CreateNightclubDto {
 
     @IsString()
     @IsOptional()
-    @IsUrl()
     imageUrl?: string;
 }

@@ -8,6 +8,8 @@ import { NightclubsModule } from './modules/nightclubs/nightclubs.module';
 import { EventsModule } from './modules/events/events.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TablesModule } from './modules/tables/tables.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 
 @Module({
     imports: [
@@ -23,9 +25,13 @@ import { TablesModule } from './modules/tables/tables.module';
         EventsModule,
         NotificationsModule,
         TablesModule,
+        BookingsModule,
+        ReviewsModule,
     ],
     controllers: [AppController],
     providers: [],
 })
 export class AppModule { }
+
+
 
