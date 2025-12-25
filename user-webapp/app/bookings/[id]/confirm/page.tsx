@@ -2,43 +2,43 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { confirmBooking, getBookingById } from '../../../../../services/api';
+import { confirmBooking, getBookingById } from '../../../../services/api';
 
 export default function BookingConfirmationPage() {
-    const params = useParams();
-    const router = useRouter();
-    const bookingId = params?.id as string;
+  const params = useParams();
+  const router = useRouter();
+  const bookingId = params?.id as string;
 
-    const [booking, setBooking] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+  const [booking, setBooking] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-    useEffect(() => {
-        handleConfirmation();
-    }, [bookingId]);
+  useEffect(() => {
+    handleConfirmation();
+  }, [bookingId]);
 
-    const handleConfirmation = async () => {
-        try {
-            // Confirm the booking
-            await confirmBooking(bookingId);
+  const handleConfirmation = async () => {
+    try {
+      // Confirm the booking
+      await confirmBooking(bookingId);
 
-            // Fetch booking details
-            const bookingData = await getBookingById(bookingId);
-            setBooking(bookingData);
-        } catch (err: any) {
-            console.error('Confirmation failed:', err);
-            setError(err.response?.data?.message || 'Failed to confirm booking');
-        } finally {
-            setLoading(false);
-        }
-    };
+      // Fetch booking details
+      const bookingData = await getBookingById(bookingId);
+      setBooking(bookingData);
+    } catch (err: any) {
+      console.error('Confirmation failed:', err);
+      setError(err.response?.data?.message || 'Failed to confirm booking');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    if (loading) {
-        return (
-            <div className="loading-container">
-                <div className="spinner"></div>
-                <p>Confirming your booking...</p>
-                <style jsx>{`
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+        <p>Confirming your booking...</p>
+        <style jsx>{`
           .loading-container {
             min-height: 100vh;
             background: #000;
@@ -61,20 +61,20 @@ export default function BookingConfirmationPage() {
             to { transform: rotate(360deg); }
           }
         `}</style>
-            </div>
-        );
-    }
+      </div>
+    );
+  }
 
-    if (error || !booking) {
-        return (
-            <div className="error-page">
-                <div className="error-icon">⚠️</div>
-                <h1>Booking Failed</h1>
-                <p>{error || 'Something went wrong'}</p>
-                <button onClick={() => router.push('/browse')} className="btn-secondary">
-                    Back to Browse
-                </button>
-                <style jsx>{`
+  if (error || !booking) {
+    return (
+      <div className="error-page">
+        <div className="error-icon">⚠️</div>
+        <h1>Booking Failed</h1>
+        <p>{error || 'Something went wrong'}</p>
+        <button onClick={() => router.push('/browse')} className="btn-secondary">
+          Back to Browse
+        </button>
+        <style jsx>{`
           .error-page {
             min-height: 100vh;
             background: #000;
@@ -108,71 +108,71 @@ export default function BookingConfirmationPage() {
             font-size: 15px;
           }
         `}</style>
-            </div>
-        );
-    }
+      </div>
+    );
+  }
 
-    return (
-        <div className="confirmation-page">
-            <div className="success-animation">
-                <div className="success-icon">✓</div>
-            </div>
+  return (
+    <div className="confirmation-page">
+      <div className="success-animation">
+        <div className="success-icon">✓</div>
+      </div>
 
-            <h1>Booking Confirmed!</h1>
-            <p className="subtitle">Your table has been successfully reserved</p>
+      <h1>Booking Confirmed!</h1>
+      <p className="subtitle">Your table has been successfully reserved</p>
 
-            <div className="booking-card">
-                <h2>{booking.nightclub?.name || 'Venue'}</h2>
+      <div className="booking-card">
+        <h2>{booking.nightclub?.name || 'Venue'}</h2>
 
-                <div className="details-grid">
-                    <div className="detail-item">
-                        <span className="label">📅 Date</span>
-                        <span className="value">{new Date(booking.bookingDate).toLocaleDateString()}</span>
-                    </div>
+        <div className="details-grid">
+          <div className="detail-item">
+            <span className="label">📅 Date</span>
+            <span className="value">{new Date(booking.bookingDate).toLocaleDateString()}</span>
+          </div>
 
-                    <div className="detail-item">
-                        <span className="label">🕐 Time</span>
-                        <span className="value">{booking.bookingTime}</span>
-                    </div>
+          <div className="detail-item">
+            <span className="label">🕐 Time</span>
+            <span className="value">{booking.bookingTime}</span>
+          </div>
 
-                    <div className="detail-item">
-                        <span className="label">👥 Guests</span>
-                        <span className="value">{booking.numberOfGuests}</span>
-                    </div>
+          <div className="detail-item">
+            <span className="label">👥 Guests</span>
+            <span className="value">{booking.numberOfGuests}</span>
+          </div>
 
-                    <div className="detail-item">
-                        <span className="label">🪑 Table</span>
-                        <span className="value">{booking.table?.capacity || 'N/A'} pax</span>
-                    </div>
-                </div>
+          <div className="detail-item">
+            <span className="label">🪑 Table</span>
+            <span className="value">{booking.table?.capacity || 'N/A'} pax</span>
+          </div>
+        </div>
 
-                {booking.specialRequests && (
-                    <div className="special-requests">
-                        <p className="label">Special Requests:</p>
-                        <p className="value">{booking.specialRequests}</p>
-                    </div>
-                )}
+        {booking.specialRequests && (
+          <div className="special-requests">
+            <p className="label">Special Requests:</p>
+            <p className="value">{booking.specialRequests}</p>
+          </div>
+        )}
 
-                <div className="total-paid">
-                    <span>Total Paid</span>
-                    <span className="amount">€{Number(booking.totalAmount).toFixed(2)}</span>
-                </div>
+        <div className="total-paid">
+          <span>Total Paid</span>
+          <span className="amount">€{Number(booking.totalAmount).toFixed(2)}</span>
+        </div>
 
-                <div className="booking-id">
-                    Booking ID: {booking.id?.slice(0, 8)}...
-                </div>
-            </div>
+        <div className="booking-id">
+          Booking ID: {booking.id?.slice(0, 8)}...
+        </div>
+      </div>
 
-            <div className="actions">
-                <button onClick={() => router.push('/bookings')} className="btn-primary">
-                    View My Bookings
-                </button>
-                <button onClick={() => router.push('/browse')} className="btn-secondary">
-                    Browse More Venues
-                </button>
-            </div>
+      <div className="actions">
+        <button onClick={() => router.push('/bookings')} className="btn-primary">
+          View My Bookings
+        </button>
+        <button onClick={() => router.push('/browse')} className="btn-secondary">
+          Browse More Venues
+        </button>
+      </div>
 
-            <style jsx>{`
+      <style jsx>{`
         .confirmation-page {
           min-height: 100vh;
           background: #000;
@@ -350,6 +350,6 @@ export default function BookingConfirmationPage() {
           }
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 }
