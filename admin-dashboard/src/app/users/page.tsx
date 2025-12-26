@@ -20,7 +20,8 @@ export default function UsersPage() {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const response = await fetch('http://localhost:3000/api/auth/users');
+            const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000/api';
+            const response = await fetch(`${apiUrl}/auth/users`);
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
             }
