@@ -115,7 +115,7 @@ export default function BookingForm({ table, venueId, venueName }: BookingFormPr
                 <label>📅 Select Date</label>
                 <DatePicker
                   selected={selectedDate}
-                  onChange={(date) => setSelectedDate(date)}
+                  onChange={(date: Date | null) => setSelectedDate(date)}
                   minDate={today}
                   dateFormat="MMM dd, yyyy"
                   placeholderText="Click to select a date"
