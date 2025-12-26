@@ -10,9 +10,12 @@ async function bootstrap() {
         origin: [
             'http://localhost:3001', // Admin Dashboard (local)
             'http://localhost:3002', // User Web App (local)
-            'https://nightclub-user-app.vercel.app', // User Web App (production)
-            'https://nightclub-admin-dashboard.vercel.app', // Admin Dashboard (production)
+            'https://nightclub-user-app.vercel.app', // User Web App (Vercel)
+            'https://nightclub-admin-dashboard.vercel.app', // Admin Dashboard (Vercel)
+            'https://terrific-curiosity-production.up.railway.app', // User Web App (Railway)
+            'https://divine-charm-production.up.railway.app', // Admin Dashboard (Railway)
             /\.vercel\.app$/, // Allow all Vercel preview deployments
+            /\.up\.railway\.app$/, // Allow all Railway deployments
         ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
