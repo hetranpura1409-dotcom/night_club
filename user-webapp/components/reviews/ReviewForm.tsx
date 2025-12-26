@@ -53,7 +53,7 @@ export default function ReviewForm({ nightclubId, onSubmit, onCancel }: ReviewFo
             rating,
             title: title.trim() || '',
             comment: comment.trim(),
-            visitDate: visitDate || undefined, // Send undefined instead of empty string
+            visitDate: visitDate || '', // Send empty string if no date
         });
 
         // Reset form
