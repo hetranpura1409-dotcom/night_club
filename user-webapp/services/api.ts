@@ -118,6 +118,11 @@ export const cancelBooking = async (bookingId: string) => {
     return response.data;
 };
 
+export const getBookingQRCode = async (bookingId: string) => {
+    const response = await apiClient.get(`/bookings/${bookingId}/qrcode`);
+    return response.data;
+};
+
 // Reviews API functions
 export const submitReview = async (reviewData: {
     userId: string;

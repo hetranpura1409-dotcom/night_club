@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { confirmBooking, getBookingById } from '../../../../services/api';
+import { confirmBooking, getBookingById, getBookingQRCode } from '../../../../services/api';
 
 export default function BookingConfirmationPage() {
   const params = useParams();
@@ -10,6 +10,7 @@ export default function BookingConfirmationPage() {
   const bookingId = params?.id as string;
 
   const [booking, setBooking] = useState<any>(null);
+  const [qrCodeImage, setQrCodeImage] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,6 +26,14 @@ export default function BookingConfirmationPage() {
       // Fetch booking details
       const bookingData = await getBookingById(bookingId);
       setBooking(bookingData);
+
+      // Fetch QR code
+      try {
+        const qrCode = await getBookingQRCode(bookingId);
+        setQrCodeImage(qrCode);
+      } catch (qrErr) {
+        console.log('QR code not available yet');
+      }
     } catch (err: any) {
       console.error('Confirmation failed:', err);
       setError(err.response?.data?.message || 'Failed to confirm booking');
@@ -163,6 +172,18 @@ export default function BookingConfirmationPage() {
         </div>
       </div>
 
+      {/* QR Code Ticket Section */}
+      {qrCodeImage && (
+        <div className="qr-ticket-section">
+          <h3>🎫 Your Entry Ticket</h3>
+          <p className="qr-subtitle">Show this QR code at the door for entry</p>
+          <div className="qr-code-container">
+            <img src={qrCodeImage} alt="Entry QR Code" className="qr-code-image" />
+          </div>
+          <p className="qr-note">Screenshot this ticket or save it for entry</p>
+        </div>
+      )}
+
       <div className="actions">
         <button onClick={() => router.push('/bookings')} className="btn-primary">
           View My Bookings
@@ -299,6 +320,48 @@ export default function BookingConfirmationPage() {
           font-size: 12px;
           margin-top: 16px;
           font-family: monospace;
+        }
+
+        .qr-ticket-section {
+          max-width: 600px;
+          margin: 32px auto;
+          padding: 32px;
+          background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), rgba(0, 200, 100, 0.05));
+          border: 2px dashed #00ff88;
+          border-radius: 16px;
+          text-align: center;
+        }
+
+        .qr-ticket-section h3 {
+          font-size: 24px;
+          margin-bottom: 8px;
+          color: #00ff88;
+        }
+
+        .qr-subtitle {
+          color: #888;
+          margin-bottom: 24px;
+        }
+
+        .qr-code-container {
+          display: flex;
+          justify-content: center;
+          margin-bottom: 16px;
+        }
+
+        .qr-code-image {
+          width: 200px;
+          height: 200px;
+          padding: 12px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 8px 32px rgba(0, 255, 136, 0.2);
+        }
+
+        .qr-note {
+          color: #666;
+          font-size: 14px;
+          font-style: italic;
         }
 
         .actions {

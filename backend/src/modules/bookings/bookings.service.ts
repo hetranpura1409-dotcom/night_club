@@ -6,6 +6,8 @@ import { Payment, PaymentStatusEnum } from '../../entities/payment.entity';
 import { Table } from '../../entities/table.entity';
 import { StripeService } from '../../services/stripe.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import * as QRCode from 'qrcode';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class BookingsService {
@@ -92,6 +94,10 @@ export class BookingsService {
         );
 
         if (paymentIntent.status === 'succeeded') {
+            // Generate unique QR code
+            const qrCodeData = uuidv4();
+            booking.qrCode = qrCodeData;
+
             // Update booking status
             booking.status = BookingStatus.CONFIRMED;
             booking.paymentStatus = PaymentStatus.PAID;
@@ -169,5 +175,83 @@ export class BookingsService {
         await this.bookingsRepository.save(booking);
 
         return booking;
+    }
+
+    // Generate QR code image as data URL
+    async getBookingQRCode(bookingId: string, userId: string): Promise<string> {
+        const booking = await this.bookingsRepository.findOne({
+            where: { id: bookingId, userId },
+        });
+
+        if (!booking) {
+            throw new NotFoundException('Booking not found');
+        }
+
+        if (!booking.qrCode) {
+            throw new BadRequestException('QR code not generated for this booking');
+        }
+
+        // Generate QR code as data URL
+        const qrData = JSON.stringify({
+            bookingId: booking.id,
+            qrCode: booking.qrCode,
+            nightclubId: booking.nightclubId,
+            date: booking.bookingDate,
+        });
+
+        return await QRCode.toDataURL(qrData, {
+            width: 300,
+            margin: 2,
+            color: {
+                dark: '#000000',
+                light: '#ffffff',
+            },
+        });
+    }
+
+    // Verify QR code and check-in (for admin/door staff)
+    async verifyAndCheckIn(qrCode: string) {
+        const booking = await this.bookingsRepository.findOne({
+            where: { qrCode },
+            relations: ['user', 'table', 'nightclub'],
+        });
+
+        if (!booking) {
+            throw new NotFoundException('Invalid QR code - Booking not found');
+        }
+
+        if (booking.status !== BookingStatus.CONFIRMED) {
+            throw new BadRequestException(`Booking is ${booking.status}, not confirmed`);
+        }
+
+        if (booking.checkedIn) {
+            return {
+                success: false,
+                message: 'Already checked in',
+                checkedInAt: booking.checkedInAt,
+                booking,
+            };
+        }
+
+        // Check-in the guest
+        booking.checkedIn = true;
+        booking.checkedInAt = new Date();
+        await this.bookingsRepository.save(booking);
+
+        return {
+            success: true,
+            message: 'Check-in successful!',
+            checkedInAt: booking.checkedInAt,
+            booking,
+        };
+    }
+
+    // Get all bookings for a venue (admin)
+    async getVenueBookings(nightclubId: string) {
+        return this.bookingsRepository.find({
+            where: { nightclubId },
+            relations: ['user', 'table'],
+            order: { bookingDate: 'DESC', bookingTime: 'DESC' },
+        });
     }
 }

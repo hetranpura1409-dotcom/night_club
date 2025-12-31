@@ -47,4 +47,23 @@ export class BookingsController {
         const userId = 'temp-user-id';
         return this.bookingsService.cancelBooking(id, userId);
     }
+
+    // Get QR code image for a booking
+    @Get(':id/qrcode')
+    getQRCode(@Param('id') id: string) {
+        const userId = 'temp-user-id';
+        return this.bookingsService.getBookingQRCode(id, userId);
+    }
+
+    // Verify QR code and check-in (for admin/door staff)
+    @Post('verify-checkin')
+    async verifyAndCheckIn(@Body('qrCode') qrCode: string) {
+        return this.bookingsService.verifyAndCheckIn(qrCode);
+    }
+
+    // Get all bookings for a venue (admin)
+    @Get('venue/:nightclubId')
+    getVenueBookings(@Param('nightclubId') nightclubId: string) {
+        return this.bookingsService.getVenueBookings(nightclubId);
+    }
 }

@@ -12,6 +12,7 @@ export default function Sidebar() {
         { href: '/users', label: 'Users', icon: '👥' },
         { href: '/nightclubs', label: 'Nightclubs', icon: '🏢' },
         { href: '/events', label: 'Events', icon: '📅' },
+        { href: '/check-in', label: 'Check-In', icon: '🎫' },
         { href: '/notifications', label: 'Notifications', icon: '🔔' },
     ];
 

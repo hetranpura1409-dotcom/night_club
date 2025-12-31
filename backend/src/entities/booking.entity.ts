@@ -98,4 +98,13 @@ export class Booking {
 
     @Column({ type: 'timestamp', nullable: true })
     cancelledAt: Date;
+
+    @Column({ nullable: true })
+    qrCode: string; // Unique QR code identifier
+
+    @Column({ default: false })
+    checkedIn: boolean;
+
+    @Column({ type: 'timestamp', nullable: true })
+    checkedInAt: Date;
 }
