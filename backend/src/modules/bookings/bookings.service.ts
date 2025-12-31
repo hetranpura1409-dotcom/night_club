@@ -51,8 +51,8 @@ export class BookingsService {
         const platformFee = (tablePrice * platformFeePercentage) / 100;
         const totalAmount = tablePrice + platformFee;
 
-        // 4. Create Stripe payment intent
-        const paymentIntent = await this.stripeService.createPaymentIntent(totalAmount);
+        // 4. Create mock payment intent (demo mode - no real Stripe)
+        const mockPaymentIntentId = `pi_demo_${uuidv4().slice(0, 8)}`;
 
         // 5. Create booking
         const booking = this.bookingsRepository.create({
@@ -68,14 +68,15 @@ export class BookingsService {
             totalAmount,
             status: BookingStatus.PENDING,
             paymentStatus: PaymentStatus.PENDING,
-            paymentIntentId: paymentIntent.id,
+            paymentIntentId: mockPaymentIntentId,
         });
 
         await this.bookingsRepository.save(booking);
 
         return {
             booking,
-            clientSecret: paymentIntent.client_secret,
+            clientSecret: `demo_secret_${mockPaymentIntentId}`, // Mock client secret
+            demoMode: true, // Flag to indicate demo mode
         };
     }
 
@@ -88,38 +89,30 @@ export class BookingsService {
             throw new NotFoundException('Booking not found');
         }
 
-        // Verify payment with Stripe
-        const paymentIntent = await this.stripeService.retrievePaymentIntent(
-            booking.paymentIntentId,
-        );
+        // Demo mode: Skip Stripe verification and directly confirm
+        // Generate unique QR code
+        const qrCodeData = uuidv4();
+        booking.qrCode = qrCodeData;
 
-        if (paymentIntent.status === 'succeeded') {
-            // Generate unique QR code
-            const qrCodeData = uuidv4();
-            booking.qrCode = qrCodeData;
+        // Update booking status
+        booking.status = BookingStatus.CONFIRMED;
+        booking.paymentStatus = PaymentStatus.PAID;
+        await this.bookingsRepository.save(booking);
 
-            // Update booking status
-            booking.status = BookingStatus.CONFIRMED;
-            booking.paymentStatus = PaymentStatus.PAID;
-            await this.bookingsRepository.save(booking);
+        // Create payment record (demo)
+        const payment = this.paymentsRepository.create({
+            bookingId: booking.id,
+            userId: booking.userId,
+            amount: booking.totalAmount,
+            currency: 'EUR',
+            stripePaymentIntentId: booking.paymentIntentId,
+            stripeChargeId: `ch_demo_${uuidv4().slice(0, 8)}`,
+            status: PaymentStatusEnum.SUCCEEDED,
+            processedAt: new Date(),
+        });
+        await this.paymentsRepository.save(payment);
 
-            // Create payment record
-            const payment = this.paymentsRepository.create({
-                bookingId: booking.id,
-                userId: booking.userId,
-                amount: booking.totalAmount,
-                currency: 'EUR',
-                stripePaymentIntentId: paymentIntent.id,
-                stripeChargeId: (paymentIntent as any).latest_charge || (paymentIntent as any).charges?.data?.[0]?.id,
-                status: PaymentStatusEnum.SUCCEEDED,
-                processedAt: new Date(),
-            });
-            await this.paymentsRepository.save(payment);
-
-            return booking;
-        } else {
-            throw new BadRequestException('Payment not completed');
-        }
+        return booking;
     }
 
     async getUserBookings(userId: string) {

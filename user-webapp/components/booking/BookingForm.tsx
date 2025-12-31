@@ -53,6 +53,12 @@ export default function BookingForm({ table, venueId, venueName }: BookingFormPr
         specialRequests,
       });
 
+      // Demo mode: Skip Stripe payment and go directly to confirmation
+      if (response.demoMode) {
+        router.push(`/bookings/${response.booking.id}/confirm`);
+        return;
+      }
+
       setClientSecret(response.clientSecret);
       setBookingId(response.booking.id);
     } catch (err: any) {
