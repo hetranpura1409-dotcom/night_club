@@ -69,4 +69,10 @@ export class BookingsController {
     getVenueBookings(@Param('nightclubId') nightclubId: string) {
         return this.bookingsService.getVenueBookings(nightclubId);
     }
+
+    // Get all bookings for admin dashboard
+    @Get('admin/all')
+    getAllBookingsAdmin() {
+        return this.bookingsService.getAllBookingsAdmin();
+    }
 }

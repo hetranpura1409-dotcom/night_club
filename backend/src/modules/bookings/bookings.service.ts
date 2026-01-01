@@ -123,6 +123,14 @@ export class BookingsService {
         });
     }
 
+    // Get all bookings for admin dashboard
+    async getAllBookingsAdmin() {
+        return this.bookingsRepository.find({
+            relations: ['table', 'nightclub', 'user'],
+            order: { createdAt: 'DESC' },
+        });
+    }
+
     async getBookingById(bookingId: string, userId: string) {
         const booking = await this.bookingsRepository.findOne({
             where: { id: bookingId, userId },
