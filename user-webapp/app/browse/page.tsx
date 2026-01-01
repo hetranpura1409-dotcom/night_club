@@ -46,7 +46,7 @@ export default function BrowsePage() {
     const [allClubs, setAllClubs] = useState<Nightclub[]>([]);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-    const filters = ['Home', 'Night Clubs', 'Events', 'Popular'];
+    const filters = ['Home', 'Night Clubs', 'Events', 'Popular', 'My Tickets'];
     const defaultCity = 'Stockholm';
 
     // Toggle favorite function
@@ -324,7 +324,13 @@ export default function BrowsePage() {
                     <button
                         key={filter}
                         className={`filter-chip ${activeFilter === filter ? 'active' : ''}`}
-                        onClick={() => setActiveFilter(filter)}
+                        onClick={() => {
+                            if (filter === 'My Tickets') {
+                                router.push('/my-tickets');
+                            } else {
+                                setActiveFilter(filter);
+                            }
+                        }}
                     >
                         {filter}
                     </button>
