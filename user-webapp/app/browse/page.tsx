@@ -46,8 +46,57 @@ export default function BrowsePage() {
     const [allClubs, setAllClubs] = useState<Nightclub[]>([]);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
 
+    // Advanced filter states
+    const [showFilters, setShowFilters] = useState(false);
+    const [selectedCity, setSelectedCity] = useState('');
+    const [selectedPriceRange, setSelectedPriceRange] = useState<string[]>([]);
+    const [selectedGenre, setSelectedGenre] = useState('');
+    const [minRating, setMinRating] = useState(0);
+
     const filters = ['Home', 'Night Clubs', 'Events', 'Popular', 'My Tickets'];
     const defaultCity = 'Stockholm';
+
+    // Filter options
+    const priceOptions = ['$', '$$', '$$$'];
+    const genreOptions = ['All', 'EDM', 'Hip-Hop', 'House', 'Latin', 'R&B', 'Mixed'];
+
+    // Get unique cities from venues
+    const getCities = () => {
+        const cities = new Set<string>();
+        [...featuredClubs, ...popularClubs, ...guestlistClubs, ...allClubs].forEach(club => {
+            if (club.city) cities.add(club.city);
+            if (club.location) {
+                const parts = club.location.split(',');
+                if (parts.length > 1) cities.add(parts[parts.length - 1].trim());
+            }
+        });
+        return ['All Cities', ...Array.from(cities)];
+    };
+
+    // Count active filters
+    const activeFilterCount = [
+        selectedCity && selectedCity !== '' && selectedCity !== 'All Cities',
+        selectedPriceRange.length > 0,
+        selectedGenre && selectedGenre !== '' && selectedGenre !== 'All',
+        minRating > 0
+    ].filter(Boolean).length;
+
+    // Clear all filters
+    const clearFilters = () => {
+        setSelectedCity('');
+        setSelectedPriceRange([]);
+        setSelectedGenre('');
+        setMinRating(0);
+    };
+
+    // Toggle price range selection
+    const togglePriceRange = (price: string) => {
+        setSelectedPriceRange(prev =>
+            prev.includes(price)
+                ? prev.filter(p => p !== price)
+                : [...prev, price]
+        );
+    };
 
     // Toggle favorite function
     const toggleFavorite = async (e: React.MouseEvent, nightclubId: string) => {
@@ -213,16 +262,51 @@ export default function BrowsePage() {
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
-    // Filter function for search
+    // Filter function for search and advanced filters
     const filterBySearch = (clubs: Nightclub[]) => {
-        if (!searchQuery.trim()) return clubs;
-        const query = searchQuery.toLowerCase();
-        return clubs.filter(club =>
-            club.name.toLowerCase().includes(query) ||
-            club.location?.toLowerCase().includes(query) ||
-            club.category?.toLowerCase().includes(query) ||
-            club.description?.toLowerCase().includes(query)
-        );
+        return clubs.filter(club => {
+            // Search query filter
+            if (searchQuery.trim()) {
+                const query = searchQuery.toLowerCase();
+                const matchesSearch =
+                    club.name.toLowerCase().includes(query) ||
+                    club.location?.toLowerCase().includes(query) ||
+                    club.category?.toLowerCase().includes(query) ||
+                    club.description?.toLowerCase().includes(query);
+                if (!matchesSearch) return false;
+            }
+
+            // City filter
+            if (selectedCity && selectedCity !== '' && selectedCity !== 'All Cities') {
+                const clubCity = club.city || '';
+                const locationCity = club.location?.split(',').pop()?.trim() || '';
+                if (!clubCity.toLowerCase().includes(selectedCity.toLowerCase()) &&
+                    !locationCity.toLowerCase().includes(selectedCity.toLowerCase())) {
+                    return false;
+                }
+            }
+
+            // Price range filter
+            if (selectedPriceRange.length > 0) {
+                const clubPrice = club.priceRange || '$$';
+                if (!selectedPriceRange.includes(clubPrice)) return false;
+            }
+
+            // Genre/Category filter
+            if (selectedGenre && selectedGenre !== '' && selectedGenre !== 'All') {
+                const clubCategory = club.category?.toLowerCase() || '';
+                if (!clubCategory.includes(selectedGenre.toLowerCase())) return false;
+            }
+
+            // Rating filter
+            if (minRating > 0) {
+                const stats = reviewStats[club.id];
+                const clubRating = stats?.averageRating || club.rating || 0;
+                if (clubRating < minRating) return false;
+            }
+
+            return true;
+        });
     };
 
     const filterEventsBySearch = (events: Event[]) => {
@@ -316,7 +400,86 @@ export default function BrowsePage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
+                <button
+                    className={`filter-toggle-btn ${showFilters ? 'active' : ''}`}
+                    onClick={() => setShowFilters(!showFilters)}
+                >
+                    🎛️ {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
+                </button>
             </div>
+
+            {/* Advanced Filters Panel */}
+            {showFilters && (
+                <div className="advanced-filters">
+                    <div className="filter-row">
+                        {/* City Filter */}
+                        <div className="filter-group">
+                            <label>📍 City</label>
+                            <select
+                                value={selectedCity}
+                                onChange={(e) => setSelectedCity(e.target.value)}
+                            >
+                                {getCities().map(city => (
+                                    <option key={city} value={city}>{city}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Genre Filter */}
+                        <div className="filter-group">
+                            <label>🎵 Genre</label>
+                            <select
+                                value={selectedGenre}
+                                onChange={(e) => setSelectedGenre(e.target.value)}
+                            >
+                                {genreOptions.map(genre => (
+                                    <option key={genre} value={genre}>{genre}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="filter-row">
+                        {/* Price Range Filter */}
+                        <div className="filter-group">
+                            <label>💰 Price</label>
+                            <div className="price-buttons">
+                                {priceOptions.map(price => (
+                                    <button
+                                        key={price}
+                                        className={`price-btn ${selectedPriceRange.includes(price) ? 'active' : ''}`}
+                                        onClick={() => togglePriceRange(price)}
+                                    >
+                                        {price}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Rating Filter */}
+                        <div className="filter-group">
+                            <label>⭐ Min Rating</label>
+                            <div className="rating-selector">
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <span
+                                        key={star}
+                                        className={`star ${star <= minRating ? 'active' : ''}`}
+                                        onClick={() => setMinRating(star === minRating ? 0 : star)}
+                                    >
+                                        ★
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {activeFilterCount > 0 && (
+                        <button className="clear-filters-btn" onClick={clearFilters}>
+                            ✕ Clear All Filters
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* Filter Chips */}
             <div className="filters">
@@ -732,6 +895,9 @@ export default function BrowsePage() {
 
                 .search-section {
                     margin-bottom: 16px;
+                    display: flex;
+                    gap: 12px;
+                    align-items: center;
                 }
 
                 .search-bar {
@@ -741,6 +907,7 @@ export default function BrowsePage() {
                     border-radius: 12px;
                     padding: 12px 16px;
                     gap: 12px;
+                    flex: 1;
                 }
 
                 .search-icon {
@@ -759,6 +926,149 @@ export default function BrowsePage() {
 
                 .search-bar input::placeholder {
                     color: #666;
+                }
+
+                .filter-toggle-btn {
+                    padding: 12px 16px;
+                    background: rgba(255, 255, 255, 0.08);
+                    border: 1px solid #333;
+                    border-radius: 12px;
+                    color: #888;
+                    font-size: 16px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                    white-space: nowrap;
+                }
+
+                .filter-toggle-btn:hover,
+                .filter-toggle-btn.active {
+                    background: rgba(139, 92, 246, 0.2);
+                    border-color: #8b5cf6;
+                    color: #8b5cf6;
+                }
+
+                .advanced-filters {
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid #333;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 16px;
+                    animation: slideDown 0.3s ease;
+                }
+
+                @keyframes slideDown {
+                    from { opacity: 0; transform: translateY(-10px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+
+                .filter-row {
+                    display: flex;
+                    gap: 20px;
+                    margin-bottom: 16px;
+                }
+
+                .filter-row:last-child {
+                    margin-bottom: 0;
+                }
+
+                .filter-group {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }
+
+                .filter-group label {
+                    font-size: 13px;
+                    color: #888;
+                    font-weight: 500;
+                }
+
+                .filter-group select {
+                    padding: 10px 14px;
+                    background: rgba(255, 255, 255, 0.08);
+                    border: 1px solid #444;
+                    border-radius: 10px;
+                    color: white;
+                    font-size: 14px;
+                    cursor: pointer;
+                    outline: none;
+                    transition: all 0.3s ease;
+                }
+
+                .filter-group select:hover,
+                .filter-group select:focus {
+                    border-color: #8b5cf6;
+                }
+
+                .filter-group select option {
+                    background: #1a1a1a;
+                    color: white;
+                }
+
+                .price-buttons {
+                    display: flex;
+                    gap: 8px;
+                }
+
+                .price-btn {
+                    padding: 8px 16px;
+                    background: rgba(255, 255, 255, 0.08);
+                    border: 1px solid #444;
+                    border-radius: 8px;
+                    color: #888;
+                    font-size: 14px;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+
+                .price-btn:hover {
+                    border-color: #666;
+                    color: white;
+                }
+
+                .price-btn.active {
+                    background: rgba(0, 255, 136, 0.2);
+                    border-color: #00ff88;
+                    color: #00ff88;
+                }
+
+                .rating-selector {
+                    display: flex;
+                    gap: 4px;
+                }
+
+                .rating-selector .star {
+                    font-size: 24px;
+                    color: #444;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+
+                .rating-selector .star:hover {
+                    color: #ffd700;
+                    transform: scale(1.2);
+                }
+
+                .rating-selector .star.active {
+                    color: #ffd700;
+                }
+
+                .clear-filters-btn {
+                    width: 100%;
+                    padding: 10px;
+                    background: rgba(255, 71, 87, 0.1);
+                    border: 1px solid #ff4757;
+                    border-radius: 10px;
+                    color: #ff4757;
+                    font-size: 13px;
+                    cursor: pointer;
+                    margin-top: 12px;
+                    transition: all 0.3s ease;
+                }
+
+                .clear-filters-btn:hover {
+                    background: rgba(255, 71, 87, 0.2);
                 }
 
                 .filters {
