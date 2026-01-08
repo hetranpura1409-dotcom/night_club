@@ -20,12 +20,39 @@ export default function SignUpPage() {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [countryCode, setCountryCode] = useState('+1');
+
+    const countryCodes = [
+        { code: '+1', country: 'US/CA' },
+        { code: '+44', country: 'UK' },
+        { code: '+91', country: 'IN' },
+        { code: '+46', country: 'SE' },
+        { code: '+49', country: 'DE' },
+        { code: '+33', country: 'FR' },
+        { code: '+61', country: 'AU' },
+        { code: '+81', country: 'JP' },
+        { code: '+86', country: 'CN' },
+        { code: '+55', country: 'BR' },
+        { code: '+52', country: 'MX' },
+        { code: '+34', country: 'ES' },
+        { code: '+39', country: 'IT' },
+        { code: '+31', country: 'NL' },
+        { code: '+47', country: 'NO' },
+        { code: '+45', country: 'DK' },
+        { code: '+358', country: 'FI' },
+        { code: '+41', country: 'CH' },
+        { code: '+971', country: 'UAE' },
+    ];
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value,
-        });
+        const { name, value } = e.target;
+        // Phone number: only allow digits and limit to 10
+        if (name === 'phone') {
+            const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+            setFormData({ ...formData, phone: digitsOnly });
+        } else {
+            setFormData({ ...formData, [name]: value });
+        }
     };
 
     const handleSignUp = async (e: React.FormEvent) => {
@@ -44,6 +71,11 @@ export default function SignUpPage() {
             return;
         }
 
+        if (formData.phone.length !== 10) {
+            setError('Phone number must be exactly 10 digits');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -51,7 +83,7 @@ export default function SignUpPage() {
                 formData.firstName,
                 formData.lastName,
                 formData.email,
-                formData.phone,
+                `${countryCode}${formData.phone}`,
                 formData.password
             );
             setSuccess('Account created successfully! Redirecting to login...');
@@ -132,14 +164,28 @@ export default function SignUpPage() {
                         />
                     </div>
 
-                    <div className="input-group">
+                    <div className="input-group phone-group">
+                        <select
+                            value={countryCode}
+                            onChange={(e) => setCountryCode(e.target.value)}
+                            className="country-select"
+                        >
+                            {countryCodes.map((c) => (
+                                <option key={c.code} value={c.code}>
+                                    {c.code} {c.country}
+                                </option>
+                            ))}
+                        </select>
                         <input
                             type="tel"
                             name="phone"
-                            placeholder="Phone Number"
+                            placeholder="Phone Number (10 digits)"
                             value={formData.phone}
                             onChange={handleChange}
-                            className="input-field"
+                            className="input-field phone-input"
+                            maxLength={10}
+                            pattern="[0-9]*"
+                            inputMode="numeric"
                             required
                         />
                     </div>
@@ -314,6 +360,32 @@ export default function SignUpPage() {
                 }
 
                 .input-group.half {
+                    flex: 1;
+                }
+
+                .input-group.phone-group {
+                    display: flex;
+                    gap: 8px;
+                }
+
+                .country-select {
+                    width: 110px;
+                    padding: 18px 12px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 12px;
+                    color: #FFFFFF;
+                    font-size: 14px;
+                    cursor: pointer;
+                    outline: none;
+                }
+
+                .country-select option {
+                    background: #1a1a1a;
+                    color: white;
+                }
+
+                .phone-input {
                     flex: 1;
                 }
 
