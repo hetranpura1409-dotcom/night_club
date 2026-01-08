@@ -9,7 +9,7 @@ export class StripeService {
         const apiKey = process.env.STRIPE_SECRET_KEY;
         if (apiKey && apiKey !== '') {
             this.stripe = new Stripe(apiKey, {
-                apiVersion: '2025-12-15.clover',
+                apiVersion: '2025-11-17.clover',
             });
         }
     }
@@ -29,6 +29,15 @@ export class StripeService {
     }
 
     async refundPayment(paymentIntentId: string, amount?: number) {
+        // Demo mode: return mock refund if Stripe not configured
+        if (!this.stripe) {
+            return {
+                id: `re_demo_${Date.now()}`,
+                payment_intent: paymentIntentId,
+                amount: amount || 0,
+                status: 'succeeded',
+            };
+        }
         return await this.stripe.refunds.create({
             payment_intent: paymentIntentId,
             amount: amount ? Math.round(amount * 100) : undefined,
