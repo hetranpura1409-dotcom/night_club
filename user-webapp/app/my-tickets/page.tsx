@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUserBookings, getBookingQRCode } from '../../services/api';
+import { getUserBookings, getBookingQRCode, cancelBooking } from '../../services/api';
 
 interface Booking {
     id: string;
@@ -30,6 +30,7 @@ export default function MyBookingsPage() {
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
     const [qrCodeImage, setQrCodeImage] = useState<string>('');
     const [loadingQR, setLoadingQR] = useState(false);
+    const [cancelling, setCancelling] = useState<string | null>(null);
 
     useEffect(() => {
         fetchBookings();
@@ -63,6 +64,23 @@ export default function MyBookingsPage() {
     const closeModal = () => {
         setSelectedBooking(null);
         setQrCodeImage('');
+    };
+
+    const handleCancelBooking = async (bookingId: string) => {
+        if (!confirm('Are you sure you want to cancel this booking? You will receive a full refund.')) {
+            return;
+        }
+        try {
+            setCancelling(bookingId);
+            await cancelBooking(bookingId);
+            await fetchBookings(); // Reload bookings
+            alert('Booking cancelled successfully!');
+        } catch (err: any) {
+            console.error('Failed to cancel booking:', err);
+            alert('Failed to cancel booking. Please try again.');
+        } finally {
+            setCancelling(null);
+        }
     };
 
     const formatDate = (dateString: string) => {
@@ -154,12 +172,27 @@ export default function MyBookingsPage() {
                             )}
 
                             {booking.status === 'confirmed' && !booking.checkedIn && (
-                                <button
-                                    onClick={() => viewQRCode(booking)}
-                                    className="view-ticket-btn"
-                                >
-                                    🎫 View Ticket
-                                </button>
+                                <div className="action-buttons">
+                                    <button
+                                        onClick={() => viewQRCode(booking)}
+                                        className="view-ticket-btn"
+                                    >
+                                        🎫 View Ticket
+                                    </button>
+                                    <button
+                                        onClick={() => handleCancelBooking(booking.id)}
+                                        disabled={cancelling === booking.id}
+                                        className="cancel-btn"
+                                    >
+                                        {cancelling === booking.id ? 'Cancelling...' : '✕ Cancel'}
+                                    </button>
+                                </div>
+                            )}
+
+                            {booking.status === 'cancelled' && (
+                                <div className="cancelled-badge">
+                                    ❌ Cancelled (Refunded)
+                                </div>
                             )}
                         </div>
                     ))}
@@ -333,15 +366,50 @@ export default function MyBookingsPage() {
                 }
 
                 .view-ticket-btn {
-                    width: 100%;
+                    flex: 1;
                     padding: 14px;
                     background: linear-gradient(135deg, #8b5cf6, #6d28d9);
                     color: white;
                     border: none;
                     border-radius: 12px;
-                    font-size: 16px;
+                    font-size: 14px;
                     font-weight: 600;
                     cursor: pointer;
+                }
+
+                .action-buttons {
+                    display: flex;
+                    gap: 12px;
+                }
+
+                .cancel-btn {
+                    padding: 14px 20px;
+                    background: transparent;
+                    color: #ff4444;
+                    border: 1px solid #ff4444;
+                    border-radius: 12px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+
+                .cancel-btn:hover:not(:disabled) {
+                    background: rgba(255, 68, 68, 0.1);
+                }
+
+                .cancel-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                .cancelled-badge {
+                    background: rgba(255, 68, 68, 0.1);
+                    color: #ff4444;
+                    padding: 12px;
+                    border-radius: 12px;
+                    text-align: center;
+                    font-size: 14px;
                 }
 
                 .modal-overlay {
