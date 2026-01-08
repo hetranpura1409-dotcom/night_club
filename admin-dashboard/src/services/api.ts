@@ -34,6 +34,11 @@ export const deleteNightclub = async (id: string) => {
     return response.data;
 };
 
+export const updateNightclub = async (id: string, data: any) => {
+    const response = await apiClient.patch(`/nightclubs/${id}`, data);
+    return response.data;
+};
+
 export const getEvents = async () => {
     const response = await apiClient.get('/events');
     return response.data;
