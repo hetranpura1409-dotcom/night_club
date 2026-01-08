@@ -751,10 +751,9 @@ export default function BrowsePage() {
                 .browse-container {
                     min-height: 100vh;
                     background: #000000;
-                    padding: 20px 16px;
+                    padding: 20px 24px;
                     padding-bottom: 40px;
-                    max-width: 1400px;
-                    margin: 0 auto;
+                    width: 100%;
                 }
 
                 .header {
