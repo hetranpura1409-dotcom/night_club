@@ -9,7 +9,7 @@ export class StripeService {
         const apiKey = process.env.STRIPE_SECRET_KEY;
         if (apiKey && apiKey !== '') {
             this.stripe = new Stripe(apiKey, {
-                apiVersion: '2025-11-17.clover',
+                apiVersion: '2026-02-25.clover' as any,
             });
         }
     }
