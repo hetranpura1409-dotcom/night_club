@@ -4,6 +4,7 @@ import {
     Post,
     Body,
     Param,
+    Headers,
     Patch,
     // UseGuards,
     // Request,
@@ -34,8 +35,8 @@ export class BookingsController {
     }
 
     @Get()
-    getUserBookings() {
-        const userId = DEMO_USER_ID;
+    getUserBookings(@Headers('x-user-id') userIdHeader?: string) {
+        const userId = userIdHeader || DEMO_USER_ID;
         return this.bookingsService.getUserBookings(userId);
     }
 

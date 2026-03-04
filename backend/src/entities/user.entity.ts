@@ -23,6 +23,9 @@ export class User {
     @Column({ nullable: true })
     fcmToken: string;
 
+    @Column({ nullable: true })
+    birthday: string;
+
     @Column({ unique: true, nullable: true })
     userCode: string;
 

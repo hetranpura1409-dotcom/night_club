@@ -16,26 +16,51 @@ export class AuthService {
     ) { }
 
     async signUp(signUpDto: SignUpDto) {
-        const { firstName, lastName, email, mobile, password } = signUpDto;
+        let { firstName, lastName, email, mobile, password, name } = signUpDto;
 
-        // Check if user already exists by email
-        const existingUser = await this.userRepository.findOne({ where: { email } });
+        // Handle simplified signup (name only)
+        if (name && (!firstName || !lastName)) {
+            const parts = name.trim().split(' ');
+            firstName = parts[0];
+            lastName = parts.length > 1 ? parts.slice(1).join(' ') : '';
+        }
+
+        // Handle missing email (mobile-only signup)
+        if (!email) {
+            email = `${mobile}@temp.nightclub.com`;
+        }
+
+        // Handle missing password
+        if (!password) {
+            password = Math.random().toString(36).slice(-8);
+        }
+
+        // Check if user already exists by email OR mobile
+        const existingUser = await this.userRepository.findOne({
+            where: [
+                { email },
+                { mobile }
+            ]
+        });
+
         if (existingUser) {
-            throw new BadRequestException('User with this email already exists');
+            throw new BadRequestException('User with this mobile or email already exists');
         }
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Generate custom user code (e.g., VK123456)
-        const initials = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
+        const fInitial = firstName ? firstName.charAt(0) : 'U';
+        const lInitial = lastName ? lastName.charAt(0) : 'U';
+        const initials = (fInitial + lInitial).toUpperCase();
         const randomNumbers = Math.floor(100000 + Math.random() * 900000); // 6-digit number
         const userCode = `${initials}${randomNumbers}`;
 
         // Create new user
         const user = this.userRepository.create({
-            firstName,
-            lastName,
+            firstName: firstName || '',
+            lastName: lastName || '',
             email,
             mobile,
             password: hashedPassword,
@@ -48,9 +73,11 @@ export class AuthService {
         const payload = { sub: user.id, email: user.email };
         const accessToken = this.jwtService.sign(payload);
 
+        // For POC, we return a mock verification code if strict verification isn't enabled
         return {
             message: 'Sign up successful',
             accessToken,
+            mockCode: '123456', // Return mock code for mobile app
             user: {
                 id: user.id,
                 userCode: user.userCode,
@@ -136,7 +163,33 @@ export class AuthService {
             lastName: user.lastName,
             email: user.email,
             mobile: user.mobile,
+            birthday: user.birthday,
             createdAt: user.createdAt,
+        };
+    }
+
+    async updateProfile(userId: string, data: { firstName?: string; lastName?: string; email?: string; mobile?: string; birthday?: string }) {
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+        if (!user) {
+            throw new UnauthorizedException('User not found');
+        }
+
+        if (data.firstName !== undefined) user.firstName = data.firstName;
+        if (data.lastName !== undefined) user.lastName = data.lastName;
+        if (data.email !== undefined) user.email = data.email;
+        if (data.mobile !== undefined) user.mobile = data.mobile;
+        if (data.birthday !== undefined) user.birthday = data.birthday;
+
+        await this.userRepository.save(user);
+
+        return {
+            id: user.id,
+            userCode: user.userCode,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            mobile: user.mobile,
+            birthday: user.birthday,
         };
     }
 

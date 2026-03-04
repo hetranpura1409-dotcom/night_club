@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
-import { AuthResponse, SignUpResponse, User } from '../types';
+import { AuthResponse, SignUpResponse, User, SignUpData } from '../types';
 
 export const authService = {
-    async signUp(name: string, mobile: string): Promise<SignUpResponse> {
-        const response = await api.post<SignUpResponse>('/auth/signup', { name, mobile });
+    async signUp(data: SignUpData): Promise<SignUpResponse> {
+        const response = await api.post<SignUpResponse>('/auth/signup', data);
         return response.data;
     },
 
@@ -19,8 +19,30 @@ export const authService = {
         return response.data;
     },
 
+    async signIn(email: string, password: string): Promise<AuthResponse> {
+        const response = await api.post<AuthResponse>('/auth/signin', { email, password });
+        const { accessToken, user } = response.data;
+
+        // Store token and user data
+        await AsyncStorage.setItem('authToken', accessToken);
+        await AsyncStorage.setItem('user', JSON.stringify(user));
+
+        return response.data;
+    },
+
     async getProfile(): Promise<User> {
         const response = await api.get<User>('/auth/me');
+        return response.data;
+    },
+
+    async updateProfile(data: { firstName?: string; lastName?: string; email?: string; mobile?: string; birthday?: string }): Promise<User> {
+        const response = await api.patch<User>('/auth/profile', data);
+        // Keep local AsyncStorage in sync
+        const existing = await AsyncStorage.getItem('user');
+        if (existing) {
+            const updated = { ...JSON.parse(existing), ...response.data };
+            await AsyncStorage.setItem('user', JSON.stringify(updated));
+        }
         return response.data;
     },
 

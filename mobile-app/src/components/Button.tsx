@@ -6,12 +6,13 @@ interface ButtonProps {
     onPress: () => void;
     loading?: boolean;
     disabled?: boolean;
+    style?: object;
 }
 
-const Button: React.FC<ButtonProps> = ({ title, onPress, loading, disabled }) => {
+const Button: React.FC<ButtonProps> = ({ title, onPress, loading, disabled, style }) => {
     return (
         <TouchableOpacity
-            style={[styles.button, disabled && styles.disabled]}
+            style={[styles.button, disabled && styles.disabled, style]}
             onPress={onPress}
             disabled={disabled || loading}
         >

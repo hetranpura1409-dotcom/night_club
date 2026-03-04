@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmConfig } from './config/typeorm.config';
 import { AppController } from './app.controller';
@@ -10,6 +10,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { TablesModule } from './modules/tables/tables.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
+import { FavoritesModule } from './modules/favorites/favorites.module';
 
 @Module({
     imports: [
@@ -18,7 +19,17 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
             envFilePath: '.env',
         }),
         TypeOrmModule.forRootAsync({
-            useFactory: () => typeOrmConfig,
+            imports: [ConfigModule],
+            inject: [ConfigService],
+            useFactory: (config: ConfigService) => ({
+                type: 'postgres',
+                url: config.get('DATABASE_URL'),
+                entities: [__dirname + '/**/*.entity{.ts,.js}'],
+                synchronize: true,
+                ssl: {
+                    rejectUnauthorized: false,
+                },
+            }),
         }),
         AuthModule,
         NightclubsModule,
@@ -27,6 +38,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
         TablesModule,
         BookingsModule,
         ReviewsModule,
+        FavoritesModule,
     ],
     controllers: [AppController],
     providers: [],
