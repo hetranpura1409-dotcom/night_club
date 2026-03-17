@@ -2,6 +2,11 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'react-native';
+import Mapbox from '@rnmapbox/maps';
+import MAPBOX_ACCESS_TOKEN from './config/mapbox';
+
+// Initialize Mapbox once at app startup — before any screen renders
+Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN);
 
 // Import screens
 import SplashScreen from './screens/SplashScreen';

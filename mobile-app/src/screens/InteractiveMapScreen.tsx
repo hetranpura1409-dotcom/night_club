@@ -13,13 +13,15 @@ import {
     Platform,
 } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
-import MAPBOX_ACCESS_TOKEN from '../config/mapbox';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Nightclub } from '../types';
 import BottomNav from '../components/BottomNav';
 import { MOCK_VENUES } from '../data/mockVenues';
+import MAPBOX_ACCESS_TOKEN from '../config/mapbox';
 
-Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN);
+// MapLibre (the underlying SDK) requires HTTPS URLs — mapbox:// scheme is unsupported.
+// We embed the access token in the HTTPS style URL so tiles are served correctly.
+const MAP_STYLE_URL = `https://api.mapbox.com/styles/v1/mapbox/dark-v10?access_token=${MAPBOX_ACCESS_TOKEN}`;
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.8;
@@ -134,7 +136,7 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
             {/* Full Screen Mapbox Map */}
             <Mapbox.MapView
                 style={styles.map}
-                styleURL={Mapbox.StyleURL.Dark}
+                styleURL={MAP_STYLE_URL}
                 logoEnabled={false}
                 compassEnabled
             >

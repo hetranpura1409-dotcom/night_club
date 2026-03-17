@@ -16,6 +16,11 @@
       android:roundIcon="@mipmap/ic_launcher_round"
       android:allowBackup="false"
       android:theme="@style/AppTheme">
+      <!-- Mapbox token provided natively so SDK can init before JS bridge is ready -->
+      <meta-data
+        android:name="MAPBOX_ACCESS_TOKEN"
+        android:value="@string/mapbox_access_token" />
+
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"

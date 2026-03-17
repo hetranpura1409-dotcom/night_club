@@ -81,6 +81,9 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        // Expose the Mapbox token as a native string resource so the SDK
+        // can read it before any JS bridge code runs (fixes "Unable to parse resourceUrl")
+        resValue "string", "mapbox_access_token", (project.findProperty("MAPBOX_DOWNLOADS_TOKEN") ?: "")
         externalNativeBuild {
             cmake {
                 arguments "-DANDROID_STL=c++_shared"
