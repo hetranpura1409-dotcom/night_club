@@ -19,9 +19,48 @@ import BottomNav from '../components/BottomNav';
 import { MOCK_VENUES } from '../data/mockVenues';
 import MAPBOX_ACCESS_TOKEN from '../config/mapbox';
 
-// MapLibre (the underlying SDK) requires HTTPS URLs — mapbox:// scheme is unsupported.
-// We embed the access token in the HTTPS style URL so tiles are served correctly.
-const MAP_STYLE_URL = `https://api.mapbox.com/styles/v1/mapbox/dark-v10?access_token=${MAPBOX_ACCESS_TOKEN}`;
+// Base URL to fetch the Mapbox style JSON
+const STYLE_FETCH_URL = `https://api.mapbox.com/styles/v1/mapbox/dark-v10?access_token=${MAPBOX_ACCESS_TOKEN}`;
+
+/**
+ * MapLibre SDK (the @rnmapbox/maps default backend) cannot parse mapbox:// URIs.
+ * This function fetches the Mapbox style JSON and rewrites every internal
+ * mapbox:// reference to its HTTPS equivalent so MapLibre can load them.
+ */
+async function fetchMapboxStyleAsHTTPS(): Promise<string> {
+    const res = await fetch(STYLE_FETCH_URL);
+    if (!res.ok) throw new Error(`Style fetch failed: ${res.status}`);
+    const style = await res.json();
+
+    // Sprites  e.g. mapbox://sprites/mapbox/dark-v10
+    if (typeof style.sprite === 'string' && style.sprite.startsWith('mapbox://sprites/')) {
+        const path = style.sprite.replace('mapbox://sprites/', '');
+        style.sprite = `https://api.mapbox.com/styles/v1/${path}/sprite?access_token=${MAPBOX_ACCESS_TOKEN}`;
+    }
+
+    // Glyphs  e.g. mapbox://fonts/mapbox/{fontstack}/{range}.pbf
+    if (typeof style.glyphs === 'string' && style.glyphs.startsWith('mapbox://fonts/')) {
+        style.glyphs = `https://api.mapbox.com/fonts/v1/{fontstack}/{range}.pbf?access_token=${MAPBOX_ACCESS_TOKEN}`;
+    }
+
+    // Tile sources  e.g. { "url": "mapbox://mapbox.mapbox-streets-v8" }
+    if (style.sources) {
+        for (const src of Object.values(style.sources) as any[]) {
+            if (typeof src.url === 'string' && src.url.startsWith('mapbox://')) {
+                const tileset = src.url.replace('mapbox://', '');
+                src.url = `https://api.mapbox.com/v4/${tileset}.json?access_token=${MAPBOX_ACCESS_TOKEN}`;
+            }
+            // Inline tile URL arrays
+            if (Array.isArray(src.tiles)) {
+                src.tiles = src.tiles.map((t: string) =>
+                    t.startsWith('mapbox://') ? t.replace('mapbox://', 'https://api.mapbox.com/v4/') : t
+                );
+            }
+        }
+    }
+
+    return JSON.stringify(style);
+}
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.8;
@@ -44,8 +83,19 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
     const [selectedVenue, setSelectedVenue] = useState<Nightclub | null>(null);
+    const [mapStyle, setMapStyle] = useState<string | null>(null);
     const mapCamera = useRef<any>(null);
     const flatListRef = useRef<FlatList>(null);
+
+    // Fetch Mapbox style once, rewriting all mapbox:// URIs to HTTPS
+    useEffect(() => {
+        fetchMapboxStyleAsHTTPS()
+            .then(setMapStyle)
+            .catch(() => {
+                // On failure fall back to direct HTTPS URL (tiles will load, sprites may warn)
+                setMapStyle(STYLE_FETCH_URL);
+            });
+    }, []);
 
     // Filter venues
     const filteredVenues = useMemo(() => {
@@ -133,10 +183,11 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            {/* Full Screen Mapbox Map */}
+            {/* Full Screen Mapbox Map — renders once the HTTPS-patched style JSON is ready */}
+            {mapStyle ? (
             <Mapbox.MapView
                 style={styles.map}
-                styleURL={MAP_STYLE_URL}
+                styleURL={mapStyle}
                 logoEnabled={false}
                 compassEnabled
             >
@@ -178,6 +229,11 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                     </Mapbox.PointAnnotation>
                 ))}
             </Mapbox.MapView>
+            ) : (
+                <View style={[styles.map, styles.mapLoading]}>
+                    <Text style={styles.mapLoadingText}>Loading map…</Text>
+                </View>
+            )}
 
             {/* Overlays */}
             <View style={styles.overlay}>
@@ -247,6 +303,15 @@ const styles = StyleSheet.create({
     },
     map: {
         flex: 1,
+    },
+    mapLoading: {
+        backgroundColor: '#111',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    mapLoadingText: {
+        color: '#F7C948',
+        fontSize: 14,
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
