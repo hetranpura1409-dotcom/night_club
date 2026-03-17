@@ -33,14 +33,18 @@ async function fetchMapboxStyleAsHTTPS(): Promise<string> {
     const style = await res.json();
 
     // Sprites  e.g. mapbox://sprites/mapbox/dark-v10
+    // Maps to https://api.mapbox.com/styles/v1/{user}/{style}/sprite
     if (typeof style.sprite === 'string' && style.sprite.startsWith('mapbox://sprites/')) {
-        const path = style.sprite.replace('mapbox://sprites/', '');
-        style.sprite = `https://api.mapbox.com/styles/v1/${path}/sprite?access_token=${MAPBOX_ACCESS_TOKEN}`;
+        const spritePath = style.sprite.replace('mapbox://sprites/', '');
+        style.sprite = `https://api.mapbox.com/styles/v1/${spritePath}/sprite?access_token=${MAPBOX_ACCESS_TOKEN}`;
     }
 
     // Glyphs  e.g. mapbox://fonts/mapbox/{fontstack}/{range}.pbf
+    // Preserve the username (mapbox/) that follows "fonts/" in the original URL.
     if (typeof style.glyphs === 'string' && style.glyphs.startsWith('mapbox://fonts/')) {
-        style.glyphs = `https://api.mapbox.com/fonts/v1/{fontstack}/{range}.pbf?access_token=${MAPBOX_ACCESS_TOKEN}`;
+        style.glyphs =
+            style.glyphs.replace('mapbox://fonts/', 'https://api.mapbox.com/fonts/v1/') +
+            `?access_token=${MAPBOX_ACCESS_TOKEN}`;
     }
 
     // Tile sources  e.g. { "url": "mapbox://mapbox.mapbox-streets-v8" }
