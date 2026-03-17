@@ -7,6 +7,7 @@ import {
     StyleSheet,
     StatusBar,
     Image,
+    Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -28,7 +29,7 @@ const EventDetailScreen: React.FC<EventDetailScreenProps> = ({ route, navigation
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#000" />
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Hero Image */}
             <View style={styles.heroContainer}>
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
     },
     backButton: {
         position: 'absolute',
-        top: 44,
+        top: Platform.OS === 'ios' ? 44 : (StatusBar.currentHeight || 0) + 12,
         left: 16,
         width: 40,
         height: 40,

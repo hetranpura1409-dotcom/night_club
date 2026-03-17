@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Alert, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import { authService } from '../services/auth';
@@ -31,6 +31,7 @@ const VerificationScreen = ({ route, navigation }: any) => {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
         >
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             <View style={styles.content}>
                 <Text style={styles.emoji}>📱</Text>
                 <Text style={styles.title}>Enter Code</Text>
@@ -49,6 +50,7 @@ const VerificationScreen = ({ route, navigation }: any) => {
                         maxLength={6}
                         textAlign="center"
                         style={styles.codeInput}
+                        placeholderTextColor="#6B7280"
                     />
                     <Button
                         title="Verify"
@@ -65,11 +67,12 @@ const VerificationScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff',
+        backgroundColor: '#000',
     },
     content: {
         flex: 1,
         padding: 24,
+        paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 0) + 16,
         justifyContent: 'center',
     },
     emoji: {
@@ -80,26 +83,26 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: '#111827',
+        color: '#fff',
         textAlign: 'center',
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 16,
-        color: '#6B7280',
+        color: '#9CA3AF',
         textAlign: 'center',
         marginBottom: 16,
     },
     mobile: {
         fontWeight: '600',
-        color: '#7C3AED',
+        color: '#FBBF24',
     },
     hint: {
         fontSize: 14,
-        color: '#F59E0B',
+        color: '#FBBF24',
         textAlign: 'center',
         marginBottom: 32,
-        backgroundColor: '#FEF3C7',
+        backgroundColor: 'rgba(251, 191, 36, 0.1)',
         padding: 12,
         borderRadius: 8,
     },
@@ -110,6 +113,10 @@ const styles = StyleSheet.create({
         fontSize: 24,
         fontWeight: '600',
         letterSpacing: 8,
+        color: '#fff',
+        backgroundColor: '#1F2937',
+        borderRadius: 12,
+        marginBottom: 20,
     },
 });
 

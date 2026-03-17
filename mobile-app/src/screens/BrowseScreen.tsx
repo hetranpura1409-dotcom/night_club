@@ -7,6 +7,8 @@ import {
     StyleSheet,
     ActivityIndicator,
     Image,
+    StatusBar,
+    Platform,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
@@ -81,7 +83,10 @@ export default function BrowseScreen({ navigation }: Props) {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.header}>🎉 Browse Nightclubs</Text>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+            <View style={styles.headerContainer}>
+                <Text style={styles.header}>🎉 Browse Nightclubs</Text>
+            </View>
             <FlatList
                 data={nightclubs}
                 renderItem={renderNightclub}
@@ -100,20 +105,26 @@ export default function BrowseScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f3f4f6',
+        backgroundColor: '#000',
+    },
+    headerContainer: {
+        paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 0) + 16,
+        backgroundColor: '#000',
+        borderBottomWidth: 1,
+        borderBottomColor: '#1F2937',
     },
     header: {
         fontSize: 24,
         fontWeight: 'bold',
-        padding: 20,
-        backgroundColor: 'white',
-        color: '#1a1d29',
+        paddingHorizontal: 20,
+        paddingBottom: 16,
+        color: '#fff',
     },
     list: {
         padding: 15,
     },
     card: {
-        backgroundColor: 'white',
+        backgroundColor: '#1F2937',
         borderRadius: 12,
         marginBottom: 15,
         overflow: 'hidden',

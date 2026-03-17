@@ -211,7 +211,7 @@ const SignUpScreen = ({ navigation }: any) => {
 
     return (
         <ImageBackground
-            source={{ uri: 'https://images.unsplash.com/photo-1574100004472-e5363f26abb7?q=80&w=1500&auto=format&fit=crop' }}
+            source={{ uri: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80' }}
             style={styles.container}
             resizeMode="cover"
         >

@@ -9,9 +9,14 @@ import {
     Dimensions,
     Linking,
     Platform,
+    ImageBackground,
+    FlatList,
+    NativeSyntheticEvent,
+    NativeScrollEvent,
 } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import Icon from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import { Nightclub, User } from '../types';
 import TableBookingFlow from '../components/TableBookingFlow';
 import GuestListFlow from '../components/GuestListFlow';
@@ -63,15 +68,17 @@ const VenueDetailScreen: React.FC<VenueDetailScreenProps> = ({ navigation, route
         'https://picsum.photos/seed/club3/800/600',
     ];
 
+    const getSafeUrl = (url?: string) => {
+        if (!url || url.includes('example.com')) return FALLBACK_IMAGES[0];
+        return url;
+    };
+
     const galleryImages = (() => {
         if (club.galleryImages && club.galleryImages.length > 0) {
-            return club.galleryImages.filter((img: string) => img && img.length > 0);
+            return club.galleryImages.filter((img: string) => img && img.length > 0).map(img => getSafeUrl(img));
         }
-        const primary = club.imageUrl;
-        if (primary && primary.length > 0 && !primary.includes('example.com')) {
-            return [primary, FALLBACK_IMAGES[1], FALLBACK_IMAGES[2]];
-        }
-        return FALLBACK_IMAGES;
+        const primary = getSafeUrl(club.imageUrl);
+        return [primary, FALLBACK_IMAGES[1], FALLBACK_IMAGES[2]];
     })();
 
     const clubDetails = {
@@ -106,7 +113,7 @@ const VenueDetailScreen: React.FC<VenueDetailScreenProps> = ({ navigation, route
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#000" />
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Booking Modal */}
             <TableBookingFlow
@@ -136,10 +143,30 @@ const VenueDetailScreen: React.FC<VenueDetailScreenProps> = ({ navigation, route
             <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
                 {/* Hero Image with NITEWAYS Header */}
                 <View style={styles.heroContainer}>
-                    <Image
-                        source={{ uri: galleryImages[currentImageIndex] }}
-                        style={styles.heroImage}
-                        resizeMode="cover"
+                    <FlatList
+                        data={galleryImages}
+                        keyExtractor={(_, index: number) => index.toString()}
+                        horizontal
+                        pagingEnabled
+                        showsHorizontalScrollIndicator={false}
+                        onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+                            const newIndex = Math.round(e.nativeEvent.contentOffset.x / Dimensions.get('window').width);
+                            setCurrentImageIndex(newIndex);
+                        }}
+                        renderItem={({ item }: { item: string }) => (
+                            <ImageBackground
+                                source={{ uri: item }}
+                                style={{ width: Dimensions.get('window').width, height: '100%' }}
+                                imageStyle={styles.heroImage}
+                                resizeMode="cover"
+                            >
+                                <LinearGradient 
+                                    colors={['transparent', '#0A0A0A']} 
+                                    locations={[0, 1]}
+                                    style={styles.gradientOverlay} 
+                                />
+                            </ImageBackground>
+                        )}
                     />
 
                     {/* NITEWAYS Header Overlay */}
@@ -157,17 +184,13 @@ const VenueDetailScreen: React.FC<VenueDetailScreenProps> = ({ navigation, route
                     {galleryImages.length > 1 && (
                         <View style={styles.indicators}>
                             {galleryImages.map((_: string, index: number) => (
-                                <TouchableOpacity
+                                <View
                                     key={index}
-                                    onPress={() => setCurrentImageIndex(index)}
-                                >
-                                    <View
-                                        style={[
-                                            styles.indicator,
-                                            currentImageIndex === index && styles.activeIndicator,
-                                        ]}
-                                    />
-                                </TouchableOpacity>
+                                    style={[
+                                        styles.indicator,
+                                        currentImageIndex === index && styles.activeIndicator,
+                                    ]}
+                                />
                             ))}
                         </View>
                     )}
@@ -378,13 +401,19 @@ const styles = StyleSheet.create({
     },
     // Hero
     heroContainer: {
-        height: 260,
-        position: 'relative',
+        height: Dimensions.get('window').height * 0.30,
+        backgroundColor: '#1A1A2E',
     },
     heroImage: {
         width: '100%',
         height: '100%',
-        backgroundColor: '#1A1A2E',
+    },
+    gradientOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '35%',
     },
     headerOverlay: {
         position: 'absolute',

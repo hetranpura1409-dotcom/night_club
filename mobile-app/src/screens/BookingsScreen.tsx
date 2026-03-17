@@ -59,7 +59,7 @@ const BookingsScreen = ({ navigation }: any) => {
             const mappedBookings: Booking[] = data.map((b: any) => ({
                 id: b.id,
                 venueName: b.nightclub?.name || 'Unknown Venue',
-                venueImage: b.nightclub?.coverImage || 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=400',
+                venueImage: b.nightclub?.coverImage || 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
                 venueAddress: b.nightclub?.address || '',
                 date: b.bookingDate,
                 time: b.bookingTime,
@@ -161,6 +161,7 @@ const BookingsScreen = ({ navigation }: any) => {
 
     return (
         <View style={styles.container}>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             {/* Top Header - NITEWAYS + Close */}
             <View style={styles.topHeader}>
                 <Text style={styles.brandTitle}>NITEWAYS</Text>

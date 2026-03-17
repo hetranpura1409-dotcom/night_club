@@ -37,6 +37,9 @@ google-services.json
 GoogleService-Info.plist
 firebase-adminsdk-*.json
 
+# Mapbox tokens — never commit real tokens
+mobile-app/src/config/mapbox.ts
+
 # React Native
 mobile-app/ios/Pods/
 mobile-app/ios/build/

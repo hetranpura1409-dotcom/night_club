@@ -8,6 +8,7 @@ import {
     ScrollView,
     StyleSheet,
     StatusBar,
+    Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
@@ -71,7 +72,7 @@ export const CitySelectorModal: React.FC<CitySelectorModalProps> = ({
             statusBarTranslucent
         >
             <View style={styles.container}>
-                <StatusBar barStyle="light-content" backgroundColor="#000" />
+                <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
                 {/* Header */}
                 <View style={styles.header}>
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 16,
-        paddingTop: 48,
+        paddingTop: Platform.OS === 'ios' ? 48 : (StatusBar.currentHeight || 0) + 16,
         paddingBottom: 12,
     },
     headerTitle: {

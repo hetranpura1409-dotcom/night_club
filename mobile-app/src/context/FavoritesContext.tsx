@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 import api from '../services/api';
 import { Nightclub } from '../types';
 
@@ -22,6 +24,7 @@ const FavoritesContext = createContext<FavoritesContextType>({
 });
 
 export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const navigation = useNavigation<any>();
     const [favorites, setFavorites] = useState<Nightclub[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -83,7 +86,7 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
                 ? favorites.filter(v => v.id !== venue.id)
                 : [...favorites, venue];
             await AsyncStorage.setItem(FAVORITES_CACHE_KEY, JSON.stringify(updated));
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error toggling favorite:', error);
             // Revert optimistic update on error
             if (exists) {
@@ -91,8 +94,16 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             } else {
                 setFavorites(prev => prev.filter(v => v.id !== venue.id));
             }
+
+            if (error?.response?.status === 401) {
+                // Ignore TS error since we don't have global navigation types strictly setup inside context
+                // @ts-ignore
+                navigation.navigate('Login');
+            } else {
+                Alert.alert("Error", "We couldn't save your favorite right now. Please try again.");
+            }
         }
-    }, [favorites]);
+    }, [favorites, navigation]);
 
     const isFavorite = useCallback((venueId: number) => {
         return favorites.some(v => v.id === venueId);

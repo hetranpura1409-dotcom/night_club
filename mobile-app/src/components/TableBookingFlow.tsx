@@ -54,19 +54,7 @@ const TableBookingFlow: React.FC<TableBookingFlowProps> = ({
         setLoading(true);
         setTimeout(() => {
             setLoading(false);
-            Alert.alert(
-                'Booking Confirmed! 🎉',
-                `Your table ${selectedTable?.label || ''} at ${club.name} has been booked for ${guestCount} guests.`,
-                [{
-                    text: 'OK', onPress: () => {
-                        // Reset state
-                        setStep(0);
-                        setGuestCount(2);
-                        setSpecialRequests('');
-                        onClose();
-                    }
-                }]
-            );
+            setStep(2); // Move to success step
         }, 1500);
     };
 
@@ -217,6 +205,69 @@ const TableBookingFlow: React.FC<TableBookingFlowProps> = ({
         );
     };
 
+    // ─── Step 3: Success Screen ────────────────────────
+    const renderSuccessStep = () => {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+        });
+
+        // Price from the table selected
+        const total = selectedTable ? `${selectedTable.currency}${selectedTable.price}` : '€1500';
+        const labelStr = selectedTable ? selectedTable.label : 'T2';
+
+        return (
+            <View style={styles.successContainer}>
+                {/* Yellow Checkmark Icon */}
+                <View style={styles.successIconWrapper}>
+                    <Icon name="checkmark" size={40} color="#FBBF24" />
+                </View>
+
+                <Text style={styles.successTitle}>Booking Request Sent!</Text>
+
+                <Text style={styles.successSubtitle}>
+                    Your table request at <Text style={{ fontWeight: 'bold', color: '#fff' }}>{club.name}</Text> for {dateStr} has been sent. You'll be notified once confirmed.
+                </Text>
+
+                {/* Dark Gray Status Card */}
+                <View style={styles.successCard}>
+                    <View style={styles.successRow}>
+                        <Text style={styles.successLabel}>Table</Text>
+                        <Text style={styles.successValueBold}>{labelStr}</Text>
+                    </View>
+                    <View style={styles.successSep} />
+                    <View style={styles.successRow}>
+                        <Text style={styles.successLabel}>Guests</Text>
+                        <Text style={styles.successValueBold}>{guestCount}</Text>
+                    </View>
+                    <View style={styles.successSep} />
+                    <View style={styles.successRow}>
+                        <Text style={styles.successLabel}>Status</Text>
+                        <Text style={styles.successStatus}>Pending Approval</Text>
+                    </View>
+                    <View style={styles.successSep} />
+                    <View style={styles.successRow}>
+                        <Text style={styles.successLabel}>Total</Text>
+                        <Text style={styles.successValueTotal}>{total}</Text>
+                    </View>
+                </View>
+
+                {/* Action Button */}
+                <TouchableOpacity
+                    style={styles.viewBookingsBtn}
+                    onPress={() => {
+                        handleClose(); // Close modal
+                        // In a real app we'd navigate to bookings tab here
+                    }}
+                >
+                    <Text style={styles.viewBookingsText}>View My Bookings</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    };
+
     return (
         <Modal
             visible={visible}
@@ -225,49 +276,58 @@ const TableBookingFlow: React.FC<TableBookingFlowProps> = ({
             onRequestClose={handleClose}
         >
             <View style={styles.overlay}>
-                <View style={styles.modal}>
-                    {/* Header */}
-                    <View style={styles.header}>
-                        <Text style={styles.headerTitle}>Book a Table</Text>
-                        <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-                            <Icon name="close" size={22} color="#fff" />
-                        </TouchableOpacity>
-                    </View>
+                <View style={[styles.modal, step === 2 && styles.modalSuccess]}>
 
-                    {/* Step Indicator */}
-                    <View style={styles.stepContainer}>
-                        {renderStepIndicator()}
-                    </View>
+                    {/* Headers + Steps only show if not on Success step */}
+                    {step !== 2 && (
+                        <>
+                            {/* Header */}
+                            <View style={styles.header}>
+                                <Text style={styles.headerTitle}>Book a Table</Text>
+                                <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+                                    <Icon name="close" size={22} color="#fff" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Step Indicator */}
+                            <View style={styles.stepContainer}>
+                                {renderStepIndicator()}
+                            </View>
+                        </>
+                    )}
 
                     {/* Content */}
                     <View style={styles.content}>
                         {step === 0 && renderDetailsStep()}
                         {step === 1 && renderConfirmStep()}
+                        {step === 2 && renderSuccessStep()}
                     </View>
 
-                    {/* Footer */}
-                    <View style={styles.footer}>
-                        <TouchableOpacity style={styles.cancelBtn} onPress={handleBack}>
-                            <Icon name="chevron-back" size={18} color="#9CA3AF" />
-                            <Text style={styles.cancelText}>
-                                {step === 0 ? 'Cancel' : 'Back'}
-                            </Text>
-                        </TouchableOpacity>
+                    {/* Footer only shows if not on Success step */}
+                    {step !== 2 && (
+                        <View style={styles.footer}>
+                            <TouchableOpacity style={styles.cancelBtn} onPress={handleBack}>
+                                <Icon name="chevron-back" size={18} color="#9CA3AF" />
+                                <Text style={styles.cancelText}>
+                                    {step === 0 ? 'Cancel' : 'Back'}
+                                </Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={[
-                                styles.nextBtn,
-                                loading && styles.nextBtnDisabled,
-                            ]}
-                            onPress={step === 1 ? handleConfirm : handleNext}
-                            disabled={loading}
-                        >
-                            <Text style={styles.nextBtnText}>
-                                {loading ? 'Processing...' : step === 1 ? 'Confirm Booking' : 'Next'}
-                            </Text>
-                            {!loading && <Icon name="chevron-forward" size={18} color="#000" />}
-                        </TouchableOpacity>
-                    </View>
+                            <TouchableOpacity
+                                style={[
+                                    styles.nextBtn,
+                                    loading && styles.nextBtnDisabled,
+                                ]}
+                                onPress={step === 1 ? handleConfirm : handleNext}
+                                disabled={loading}
+                            >
+                                <Text style={styles.nextBtnText}>
+                                    {loading ? 'Processing...' : step === 1 ? 'Confirm Booking' : 'Next'}
+                                </Text>
+                                {!loading && <Icon name="chevron-forward" size={18} color="#000" />}
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
             </View>
         </Modal>
@@ -535,6 +595,90 @@ const styles = StyleSheet.create({
     nextBtnText: {
         color: '#000',
         fontSize: 15,
+        fontWeight: 'bold',
+    },
+
+    // ─── Success Screen Styles (Step 3) ──────────────
+    modalSuccess: {
+        paddingTop: 40,
+        paddingHorizontal: 20,
+    },
+    successContainer: {
+        width: '100%',
+        marginTop: 20,
+    },
+    successIconWrapper: {
+        alignSelf: 'center',
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: '#453823', // Dark gold/brown background from reference
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 24,
+    },
+    successTitle: {
+        color: '#fff',
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    successSubtitle: {
+        color: '#9CA3AF',
+        fontSize: 15,
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 32,
+        paddingHorizontal: 10,
+    },
+    successCard: {
+        backgroundColor: '#1A1A22',
+        borderRadius: 12,
+        width: '100%',
+        paddingVertical: 10,
+        marginBottom: 32,
+    },
+    successRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+    },
+    successSep: {
+        height: 1,
+        backgroundColor: '#2A2A35',
+        marginHorizontal: 20,
+    },
+    successLabel: {
+        color: '#9CA3AF',
+        fontSize: 15,
+    },
+    successValueBold: {
+        color: '#fff',
+        fontSize: 15,
+        fontWeight: 'bold',
+    },
+    successStatus: {
+        color: '#FBBF24',
+        fontSize: 15,
+        fontWeight: 'bold',
+    },
+    successValueTotal: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    viewBookingsBtn: {
+        backgroundColor: '#FBBF24',
+        width: '100%',
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    viewBookingsText: {
+        color: '#000',
+        fontSize: 16,
         fontWeight: 'bold',
     },
 });

@@ -24,6 +24,8 @@ export interface Nightclub {
     priceLevel?: string; // '$', '$$', '$$$'
     category?: string; // 'Nightclub', 'Bar', etc.
     tags?: string[];
+    latitude?: number;
+    longitude?: number;
 }
 
 export interface Event {

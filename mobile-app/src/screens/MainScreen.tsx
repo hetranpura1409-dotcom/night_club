@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, FlatList, StatusBar, Image, Platform, Dimensions, ImageBackground } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import VenueCard from '../components/VenueCard';
 import BottomNav from '../components/BottomNav';
 import { Nightclub } from '../types';
@@ -8,273 +9,9 @@ import { CitySelectorModal } from '../components/CitySelectorModal';
 import { useNotifications } from '../context/NotificationContext';
 import { useFavorites } from '../context/FavoritesContext';
 import LiquidSearchBar from '../components/LiquidSearchBar';
+import { MOCK_VENUES } from '../data/mockVenues';
 
 // Mock Data (temporary until backend connection)
-const MOCK_VENUES: Nightclub[] = [
-    // Barcelona
-    {
-        id: 1,
-        name: 'Pacha Barcelona',
-        description: 'Iconic nightclub with world-class DJs',
-        address: 'Av. del Paral·lel, 186',
-        city: 'Barcelona',
-        imageUrl: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-            'https://images.unsplash.com/photo-1574391884720-2bbc37e3ae61?w=800&q=80',
-            'https://images.unsplash.com/photo-1522158637959-30385a09e0da?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$',
-        tags: ['House', 'Electronic', 'International DJs'],
-    },
-    {
-        id: 2,
-        name: 'Razzmatazz',
-        description: 'Multi-room superclub with 5 different spaces',
-        address: 'Carrer dels Almogàvers, 122',
-        city: 'Barcelona',
-        imageUrl: 'https://images.unsplash.com/photo-1571266028243-d220c6b1e5d9?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1571266028243-d220c6b1e5d9?w=800&q=80',
-            'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?w=800&q=80',
-            'https://images.unsplash.com/photo-1506157786151-58418c772266?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$',
-        tags: ['Indie', 'Rock', 'Techno'],
-    },
-    {
-        id: 3,
-        name: 'Opium Barcelona',
-        description: 'Beachfront club with stunning Mediterranean views',
-        address: 'Passeig Marítim de la Barceloneta, 34',
-        city: 'Barcelona',
-        imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-            'https://images.unsplash.com/photo-1596771069132-561b8319ccd1?w=800&q=80',
-            'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?w=800&q=80',
-        ],
-        category: 'Beach Club',
-        priceLevel: '$$$$',
-        tags: ['House', 'Reggaeton', 'VIP'],
-    },
-    {
-        id: 4,
-        name: 'Shôko Barcelona',
-        description: 'Asian-inspired club and restaurant by the beach',
-        address: 'Pg. Marítim de la Barceloneta, 36',
-        city: 'Barcelona',
-        imageUrl: 'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-            'https://images.unsplash.com/photo-1622396481328-9b1b78cdd9fd?w=800&q=80',
-            'https://images.unsplash.com/photo-1519750783826-e2420f4d687f?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$',
-        tags: ['Electronic', 'Beach', 'Restaurant'],
-    },
-
-    // London
-    {
-        id: 5,
-        name: 'Fabric',
-        description: 'Legendary underground club in Farringdon',
-        address: '77A Charterhouse St, Farringdon',
-        city: 'London',
-        imageUrl: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=800&q=80',
-            'https://images.unsplash.com/photo-1598387993441-a364f854c3e1?w=800&q=80',
-            'https://images.unsplash.com/photo-1545128485-c400e77d2758?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$',
-        tags: ['Techno', 'Drum & Bass', 'Underground'],
-    },
-    {
-        id: 6,
-        name: 'Ministry of Sound',
-        description: 'Iconic club with world-famous sound system',
-        address: '103 Gaunt St, Elephant and Castle',
-        city: 'London',
-        imageUrl: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-            'https://images.unsplash.com/photo-1558470598-a5dda9640f6b?w=800&q=80',
-            'https://images.unsplash.com/photo-1533174072545-e8d4aa97edf9?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$',
-        tags: ['House', 'Electronic', 'Legendary'],
-    },
-    {
-        id: 7,
-        name: 'Printworks',
-        description: 'Massive venue in converted printing factory',
-        address: 'Surrey Quays Rd, Canada Water',
-        city: 'London',
-        imageUrl: 'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-            'https://images.unsplash.com/photo-1578326466982-b7b5c8c57564?w=800&q=80',
-            'https://images.unsplash.com/photo-1627663249052-a5e18231268c?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$',
-        tags: ['Techno', 'Industrial', 'Warehouse'],
-    },
-    {
-        id: 8,
-        name: 'The Nest',
-        description: 'Intimate basement club in Dalston',
-        address: '36 Stoke Newington Rd, Dalston',
-        city: 'London',
-        imageUrl: 'https://images.unsplash.com/photo-1571266028243-d220c6b1e5d9?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1571266028243-d220c6b1e5d9?w=800&q=80',
-            'https://images.unsplash.com/photo-1582234057635-f09b2e77e231?w=800&q=80',
-            'https://images.unsplash.com/photo-1588694086088-3486a457a151?w=800&q=80',
-        ],
-        category: 'Club',
-        priceLevel: '$',
-        tags: ['House', 'Garage', 'Underground'],
-    },
-
-    // Los Angeles
-    {
-        id: 9,
-        name: 'Academy LA',
-        description: 'Hollywood nightclub with top-tier production',
-        address: '1735 N Cahuenga Blvd, Hollywood',
-        city: 'Los Angeles',
-        imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-            'https://images.unsplash.com/photo-1518115598504-749e798729cc?w=800&q=80',
-            'https://images.unsplash.com/photo-1506157786151-58418c772266?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$',
-        tags: ['EDM', 'Hip Hop', 'Celebrity'],
-    },
-    {
-        id: 10,
-        name: 'Sound Nightclub',
-        description: 'Premier nightclub with stunning visuals',
-        address: '1642 N Las Palmas Ave, Hollywood',
-        city: 'Los Angeles',
-        imageUrl: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-            'https://images.unsplash.com/photo-1509666537727-9154b6fae8ea?w=800&q=80',
-            'https://images.unsplash.com/photo-1551000673-8a3b8d146903?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$$',
-        tags: ['House', 'Techno', 'VIP'],
-    },
-    {
-        id: 11,
-        name: 'Exchange LA',
-        description: 'Historic stock exchange turned mega club',
-        address: '618 S Spring St, Downtown',
-        city: 'Los Angeles',
-        imageUrl: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=800&q=80',
-            'https://images.unsplash.com/photo-1578554854359-994df2279e8b?w=800&q=80',
-            'https://images.unsplash.com/photo-1533174072545-e8d4aa97edf9?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$',
-        tags: ['EDM', 'Multi-floor', 'Historic'],
-    },
-    {
-        id: 12,
-        name: 'Catch One',
-        description: 'Iconic LGBTQ+ nightclub with rich history',
-        address: '4067 W Pico Blvd, Mid-City',
-        city: 'Los Angeles',
-        imageUrl: 'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-            'https://images.unsplash.com/photo-1570876050997-2fdefce21852?w=800&q=80',
-            'https://images.unsplash.com/photo-1542385151-efd9000785a0?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$',
-        tags: ['House', 'LGBTQ+', 'Diverse'],
-    },
-
-    // Miami
-    {
-        id: 13,
-        name: 'LIV Miami',
-        description: 'Ultra-luxe nightclub at Fontainebleau',
-        address: '4441 Collins Ave, Miami Beach',
-        city: 'Miami',
-        imageUrl: 'https://images.unsplash.com/photo-1570876050997-2fdefce21852?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1570876050997-2fdefce21852?w=800&q=80',
-            'https://images.unsplash.com/photo-1514525253440-b393452e8d03?w=800&q=80',
-            'https://images.unsplash.com/photo-1545128485-c400e77d2758?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$$',
-        tags: ['Celebrity', 'EDM', 'VIP'],
-    },
-    {
-        id: 14,
-        name: 'E11EVEN Miami',
-        description: '24/7 ultraclub with world-class entertainment',
-        address: '29 NE 11th St, Downtown',
-        city: 'Miami',
-        imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-            'https://images.unsplash.com/photo-1533174072545-e8d4aa97edf9?w=800&q=80',
-            'https://images.unsplash.com/photo-1551000673-8a3b8d146903?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$$',
-        tags: ['24/7', 'Hip Hop', 'EDM'],
-    },
-    {
-        id: 15,
-        name: 'Story Miami',
-        description: 'Multi-level nightclub with rooftop',
-        address: '136 Collins Ave, South Beach',
-        city: 'Miami',
-        imageUrl: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80',
-            'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?w=800&q=80',
-            'https://images.unsplash.com/photo-1571266028243-d220c6b1e5d9?w=800&q=80',
-        ],
-        category: 'Nightclub',
-        priceLevel: '$$$',
-        tags: ['House', 'Rooftop', 'Beach'],
-    },
-    {
-        id: 16,
-        name: 'Treehouse Miami',
-        description: 'Rooftop club with stunning city views',
-        address: '1 Collins Ave, Rooftop',
-        city: 'Miami',
-        imageUrl: 'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-        galleryImages: [
-            'https://images.unsplash.com/photo-1598387181032-a3103a2db5b3?w=800&q=80',
-            'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800&q=80',
-            'https://images.unsplash.com/photo-1558470598-a5dda9640f6b?w=800&q=80',
-        ],
-        category: 'Rooftop Bar',
-        priceLevel: '$$$',
-        tags: ['Rooftop', 'Views', 'Cocktails'],
-    },
-];
 
 const MainScreen = ({ navigation }: any) => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -289,19 +26,23 @@ const MainScreen = ({ navigation }: any) => {
         { id: '2', name: 'London', country: 'United Kingdom' },
         { id: '3', name: 'Los Angeles', country: 'USA' },
         { id: '4', name: 'Miami', country: 'United States' },
+        { id: '5', name: 'Stockholm', country: 'Sweden' },
     ];
 
     // City-specific background images
     const cityBackgrounds: { [key: string]: string } = {
-        'Barcelona': 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=1200&q=80', // Barcelona skyline
-        'London': 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1200&q=80', // London skyline
-        'Los Angeles': 'https://images.unsplash.com/photo-1534190239940-9ba8944ea261?w=1200&q=80', // LA skyline
-        'Miami': 'https://images.unsplash.com/photo-1506966953602-c20cc11f75e3?w=1200&q=80', // Miami skyline
+        'Barcelona': 'https://th.bing.com/th/id/R.8cbd7d2bdd9e6ab920e2af173250666e?rik=JkaObKPvwNGHxg&riu=http%3a%2f%2fgetwallpapers.com%2fwallpaper%2ffull%2f2%2fc%2f1%2f1088406-download-barcelona-city-wallpapers-1920x1200-pc.jpg&ehk=%2bHzgv9a9mj%2bU%2fnS7%2fE19yvJG%2fJH5MosUJP39wSY%2bMqk%3d&risl=&pid=ImgRaw&r=0',
+        'London': 'https://wallpaperaccess.com/full/32545.jpg',
+        'Los Angeles': 'https://tse2.mm.bing.net/th/id/OIP.3gTJPOUl6XsULwWZjnzHegHaEK?rs=1&pid=ImgDetMain&o=7&rm=3',
+        'Miami': 'https://wallpaperaccess.com/full/1717445.jpg',
+        'Stockholm': 'https://cdn.getyourguide.com/img/location/533bfb836c2d1.jpeg/88.jpg',
     };
 
     const selectedCity = cities.find(c => c.id === selectedCityId);
     const displayCityName = selectedCity ? selectedCity.name : 'Select City';
-    const backgroundImage = selectedCity ? cityBackgrounds[selectedCity.name] : null;
+    // Nice dark crowd/laser image from Unsplash for the default city-less state
+    const DEFAULT_BG = 'https://images.unsplash.com/photo-1545128485-c400e7702796?q=80&w=1000';
+    const backgroundImage = selectedCity ? cityBackgrounds[selectedCity.name] : DEFAULT_BG;
 
     const renderHeader = () => (
         <View style={styles.header}>
@@ -413,7 +154,7 @@ const MainScreen = ({ navigation }: any) => {
 
     return (
         <View style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#000" />
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Header with City Background Image */}
             {backgroundImage ? (
@@ -422,7 +163,12 @@ const MainScreen = ({ navigation }: any) => {
                     style={styles.headerBackgroundContainer}
                     imageStyle={styles.headerBackgroundImage}
                 >
-                    <View style={[styles.headerOverlay, { paddingTop: 80 }]}>
+                    <LinearGradient 
+                        colors={['transparent', '#000']} 
+                        locations={[0, 1]}
+                        style={styles.cityGradientOverlay} 
+                    />
+                    <View style={[styles.headerOverlay, { paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 0) + 16 }]}>
                         {/* Fixed Header */}
                         {renderHeader()}
 
@@ -432,7 +178,7 @@ const MainScreen = ({ navigation }: any) => {
                 </ImageBackground>
             ) : (
                 <View style={styles.headerBackgroundContainerNoImage}>
-                    <View style={styles.headerOverlay}>
+                    <View style={[styles.headerOverlay, { paddingTop: Platform.OS === 'ios' ? 54 : StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 36 }]}>
                         {/* Fixed Header */}
                         {renderHeader()}
 
@@ -482,12 +228,18 @@ const styles = StyleSheet.create({
         // Compact layout for All Cities (no background image)
     },
     headerBackgroundImage: {
-        opacity: 0.55,
+        opacity: 0.9,
         resizeMode: 'cover',
     },
     headerOverlay: {
-        backgroundColor: 'rgba(0, 0, 0, 0.35)',
         paddingBottom: 0,
+    },
+    cityGradientOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '35%',
     },
     scrollContent: {
         paddingTop: 16,
@@ -498,7 +250,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'android' ? 20 : 60,
+        paddingTop: Platform.OS === 'android' ? 0 : 60,
         marginBottom: 20,
     },
     citySelector: {

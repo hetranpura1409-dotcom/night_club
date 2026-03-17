@@ -29,10 +29,13 @@ const LoginScreen = ({ navigation }: any) => {
             );
         } catch (error: any) {
             console.error('Login Error:', error);
+            const isNetwork = error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response;
             const message = error.response?.data?.message;
-            const errorMessage = Array.isArray(message)
-                ? message.join('\n')
-                : message || error.message || 'Login failed';
+            const errorMessage = isNetwork
+                ? 'Cannot reach server. Check that the backend is running (e.g. port 3000 on this machine) or try again.'
+                : Array.isArray(message)
+                    ? message.join('\n')
+                    : message || error.message || 'Login failed';
             Alert.alert('Error', errorMessage);
         } finally {
             setLoading(false);
@@ -41,7 +44,7 @@ const LoginScreen = ({ navigation }: any) => {
 
     return (
         <ImageBackground
-            source={{ uri: 'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?q=80&w=1500&auto=format&fit=crop' }}
+            source={{ uri: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80' }}
             style={styles.container}
             resizeMode="cover"
         >

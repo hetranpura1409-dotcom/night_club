@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions, Platform, StatusBar } from 'react-native';
 import { authService } from '../services/auth';
 import { CommonActions } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -70,6 +70,7 @@ const ProfileScreen = ({ navigation }: any) => {
 
     return (
         <View style={styles.container}>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -102,7 +103,7 @@ const ProfileScreen = ({ navigation }: any) => {
                     <MenuItem icon="information-circle-outline" label="About Niteways" onPress={() => navigation.navigate('About')} />
                     <MenuItem icon="shield-checkmark-outline" label="Security" onPress={() => navigation.navigate('Security')} />
                     <MenuItem icon="document-text-outline" label="Terms & Conditions" onPress={() => navigation.navigate('Terms')} />
-                    <MenuItem icon="settings-outline" label="Settings" onPress={() => { }} />
+                    <MenuItem icon="settings-outline" label="Settings" onPress={() => navigation.navigate('AppSettings')} />
                     <MenuItem icon="help-circle-outline" label="Help & Support" onPress={() => navigation.navigate('HelpSupport')} />
                 </View>
 
@@ -130,7 +131,7 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         padding: 20,
-        paddingTop: 60,
+        paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight || 0) + 16,
     },
     header: {
         flexDirection: 'row',

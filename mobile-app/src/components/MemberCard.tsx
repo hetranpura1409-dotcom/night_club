@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableWithoutFeedback, Image } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 
 interface MemberCardProps {
     name: string;
@@ -60,8 +61,20 @@ const MemberCard: React.FC<MemberCardProps> = ({ name, userId, status }) => {
                         },
                     ]}
                 >
+                    <LinearGradient
+                        colors={['#7d6b2fff', '#c1a552ff']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFillObject}
+                    />
                     <View style={styles.header}>
                         <View style={styles.avatarPlaceholder}>
+                            <LinearGradient
+                                colors={['#555', '#444444ff', '#413f3fff']}
+                                start={{ x: 0.2, y: 0.2 }}
+                                end={{ x: 0.8, y: 0.8 }}
+                                style={styles.avatarGradient}
+                            />
                             <Text style={styles.avatarText}>{initials}</Text>
                         </View>
                         <View style={styles.statusContainer}>
@@ -92,6 +105,12 @@ const MemberCard: React.FC<MemberCardProps> = ({ name, userId, status }) => {
                         },
                     ]}
                 >
+                    <LinearGradient
+                        colors={['#8A7730', '#B9993A']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFillObject}
+                    />
                     <View style={styles.qrContainer}>
                         <View style={styles.qrWrapper}>
                             <Image
@@ -113,20 +132,30 @@ const MemberCard: React.FC<MemberCardProps> = ({ name, userId, status }) => {
 
 const styles = StyleSheet.create({
     cardWrapper: {
-        height: 200,
+        height: 220,
         marginBottom: 24,
+        shadowColor: '#201f1fff',
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
     },
     card: {
-        backgroundColor: '#8B7D3C',
-        borderRadius: 16,
-        padding: 20,
-        height: 200,
+        backgroundColor: 'transparent',
+        borderRadius: 20,
+        padding: 24,
+        height: 230,
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         overflow: 'hidden',
         backfaceVisibility: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)', // subtle reflection
     },
     cardFront: {
         justifyContent: 'space-between',
@@ -144,36 +173,46 @@ const styles = StyleSheet.create({
         zIndex: 2,
     },
     avatarPlaceholder: {
-        width: 75,
-        height: 75,
-        borderRadius: 38,
-        backgroundColor: 'rgba(0,0,0,0.2)',
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: '#333333',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 3,
-        borderColor: '#8B6914',
+        borderWidth: 4,
+        borderColor: '#dab12aff', // Warmer gold ring
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.8,
+        shadowRadius: 12, // Softer, more glowing shadow
+        elevation: 10,
+    },
+    avatarGradient: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: 50,
     },
     avatarText: {
-        color: '#fff',
-        fontSize: 26,
-        fontWeight: 'bold',
+        color: '#a1a1a1ff',
+        fontSize: 42,
+        fontWeight: '700',
+        letterSpacing: 1.5,
+        zIndex: 2,
     },
     statusContainer: {
         alignItems: 'flex-end',
     },
     statusLabel: {
-        color: 'rgba(255,255,255,0.7)',
+        color: 'rgba(255,255,255,0.6)',
         fontSize: 10,
-        letterSpacing: 1,
+        letterSpacing: 1.5,
         marginBottom: 4,
+        fontWeight: '500',
     },
     statusValue: {
-        color: '#D4A843',
-        fontSize: 24,
-        fontWeight: 'bold',
-        textShadowColor: 'rgba(0,0,0,0.2)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 2,
+        color: '#f0ba0aff',
+        fontSize: 28,
+        fontWeight: '600',
+        letterSpacing: 1,
     },
     footer: {
         flexDirection: 'row',
@@ -183,19 +222,21 @@ const styles = StyleSheet.create({
     },
     name: {
         color: '#fff',
-        fontSize: 20,
-        fontWeight: 'bold',
+        fontSize: 22,
+        fontWeight: '600',
         marginBottom: 4,
+        letterSpacing: 0.5,
     },
     userId: {
-        color: 'rgba(255,255,255,0.7)',
+        color: 'rgba(255,255,255,0.6)',
         fontSize: 12,
+        letterSpacing: 1,
     },
     logo: {
-        color: 'rgba(255,255,255,0.5)',
-        fontSize: 12,
-        fontWeight: 'bold',
-        letterSpacing: 2,
+        color: 'rgba(255,255,255,0.4)',
+        fontSize: 13,
+        fontWeight: '600',
+        letterSpacing: 2.5,
     },
     overlay: {
         position: 'absolute',
@@ -203,7 +244,9 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(0,0,0,0.08)', // Slightly darker vignette for perfect white text contrast
+        borderWidth: 2,
+        borderColor: 'rgba(0,0,0,0.02)', // Inner texture
         zIndex: 1,
     },
     // Back side styles
@@ -224,8 +267,8 @@ const styles = StyleSheet.create({
     },
     backUserId: {
         color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontSize: 16,
+        fontWeight: '600',
         letterSpacing: 2,
         marginBottom: 4,
     },

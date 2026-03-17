@@ -5,6 +5,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 const TermsScreen = ({ navigation }: any) => {
     return (
         <View style={styles.container}>
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}>

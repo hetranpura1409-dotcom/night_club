@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
+import LinearGradient from 'react-native-linear-gradient';
 import { Nightclub } from '../types';
 
 interface VenueCardProps {
@@ -43,8 +44,11 @@ const VenueCard: React.FC<VenueCardProps> = ({ venue, onPress, onHeartPress, isF
                     }
                 }}
             >
-                {/* Bottom gradient for text readability */}
-                <View style={styles.gradientOverlay} />
+                <LinearGradient 
+                    colors={['transparent', '#0A0A0A']} 
+                    locations={[0, 1]}
+                    style={styles.gradientOverlay} 
+                />
 
                 {/* Heart button - top right */}
                 <TouchableOpacity
@@ -90,11 +94,14 @@ const styles = StyleSheet.create({
         borderRadius: 14,
     },
     gradientOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        borderRadius: 14,
-        backgroundColor: 'transparent',
-        // Simulated bottom gradient with a dark overlay
-        // Real LinearGradient would be better but this works without extra deps
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: '35%',
+        borderBottomLeftRadius: 14,
+        borderBottomRightRadius: 14,
+        overflow: 'hidden',
     },
     heartButton: {
         position: 'absolute',
