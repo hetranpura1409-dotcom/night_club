@@ -29,7 +29,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, navigation }) => {
                     >
                         <Icon
                             name={isActive ? tab.icon.replace('-outline', '') : tab.icon}
-                            size={24}
+                            size={18}
                             color={isActive ? '#fff' : '#6B7280'}
                         />
                         <Text style={[styles.navText, isActive && styles.activeNavText]}>

@@ -1,283 +1,293 @@
+/**
+ * MemberCard — React Native port of the Lovable MemberIdCard component.
+ * Colours are converted 1-to-1 from the original HSL values.
+ * Tap the card to flip and reveal the QR code on the back.
+ */
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableWithoutFeedback, Image } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    Animated,
+    TouchableWithoutFeedback,
+    Image,
+} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
+
+export type LoyaltyLevel = 'bronze' | 'silver' | 'gold' | 'platinum';
 
 interface MemberCardProps {
     name: string;
     userId: string;
-    status: 'Gold' | 'Silver' | 'Platinum';
+    status: LoyaltyLevel;
+    avatarUrl?: string;
 }
 
-const MemberCard: React.FC<MemberCardProps> = ({ name, userId, status }) => {
-    const [isFlipped, setIsFlipped] = useState(false);
-    const flipAnim = useRef(new Animated.Value(0)).current;
+// ── Exact colours from Lovable HSL definitions ────────────────────────────────
+// hsl(45,50%,25%) → #60501F   hsl(50,45%,35%) → #857236   hsl(45,55%,20%) → #4E3D14
+const TIER: Record<LoyaltyLevel, {
+    gradients: string[];
+    ring: string;
+    accent: string;
+    orb: boolean;
+}> = {
+    gold: {
+        gradients: ['#60501F', '#857236', '#4E3D14'],
+        ring:      '#eab308',
+        accent:    '#eab308',
+        orb:       false,
+    },
+    bronze: {
+        gradients: ['#4A2A18', '#6B3D22', '#3D2010'],
+        ring:      '#d97706',
+        accent:    '#f97316',
+        orb:       false,
+    },
+    silver: {
+        gradients: ['#3A3D42', '#4D5258', '#303438'],
+        ring:      '#9ca3af',   // zinc-400
+        accent:    '#d4d4d8',
+        orb:       false,
+    },
+    platinum: {
+        gradients: ['#2E1F4A', '#3D2B6A', '#241838'],
+        ring:      '#a855f7',   // purple-500
+        accent:    '#c084fc',
+        orb:       false,
+    },
+};
 
-    const flipCard = () => {
-        Animated.spring(flipAnim, {
+const MemberCard: React.FC<MemberCardProps> = ({ name, userId, status, avatarUrl }) => {
+    const [isFlipped, setIsFlipped] = useState(false);
+    const anim = useRef(new Animated.Value(0)).current;
+
+    const flip = () => {
+        Animated.spring(anim, {
             toValue: isFlipped ? 0 : 1,
             friction: 8,
             tension: 10,
             useNativeDriver: true,
         }).start();
-        setIsFlipped(!isFlipped);
+        setIsFlipped(f => !f);
     };
 
-    // Front side rotation: 0deg -> 180deg
-    const frontInterpolate = flipAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '180deg'],
-    });
+    const frontRotate = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+    const backRotate  = anim.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
+    const frontOpacity = anim.interpolate({ inputRange: [0, 0.5, 0.5, 1], outputRange: [1, 1, 0, 0] });
+    const backOpacity  = anim.interpolate({ inputRange: [0, 0.5, 0.5, 1], outputRange: [0, 0, 1, 1] });
 
-    // Back side rotation: 180deg -> 360deg
-    const backInterpolate = flipAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['180deg', '360deg'],
-    });
-
-    const frontOpacity = flipAnim.interpolate({
-        inputRange: [0, 0.5, 0.5, 1],
-        outputRange: [1, 1, 0, 0],
-    });
-
-    const backOpacity = flipAnim.interpolate({
-        inputRange: [0, 0.5, 0.5, 1],
-        outputRange: [0, 0, 1, 1],
-    });
-
+    const tier     = TIER[status] ?? TIER.gold;
     const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=NITEWAYS-MEMBER:${encodeURIComponent(userId)}`;
+    const qrUrl    = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=NITEWAYS-MEMBER:${encodeURIComponent(userId)}`;
+    const label    = status.charAt(0).toUpperCase() + status.slice(1);
+
+    const CardFace = ({ children }: { children: React.ReactNode }) => (
+        <>
+            {/* Base gradient */}
+            <LinearGradient
+                colors={tier.gradients}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+            />
+            {/* Diagonal sheen — matches Lovable bg-white/5 */}
+            <LinearGradient
+                colors={['rgba(255,255,255,0.06)', 'transparent', 'rgba(0,0,0,0.18)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+            />
+            {/* Decorative glow orbs (gold & bronze only) — mirrors Lovable blur circles */}
+            {tier.orb && (
+                <>
+                    <View style={styles.orbTopRight} />
+                    <View style={styles.orbBottomLeft} />
+                </>
+            )}
+            {children}
+        </>
+    );
 
     return (
-        <TouchableWithoutFeedback onPress={flipCard}>
-            <View style={styles.cardWrapper}>
-                {/* Front Side */}
-                <Animated.View
-                    style={[
-                        styles.card,
-                        styles.cardFront,
-                        {
-                            transform: [{ rotateY: frontInterpolate }],
-                            opacity: frontOpacity,
-                        },
-                    ]}
-                >
-                    <LinearGradient
-                        colors={['#7d6b2fff', '#c1a552ff']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFillObject}
-                    />
-                    <View style={styles.header}>
-                        <View style={styles.avatarPlaceholder}>
-                            <LinearGradient
-                                colors={['#555', '#444444ff', '#413f3fff']}
-                                start={{ x: 0.2, y: 0.2 }}
-                                end={{ x: 0.8, y: 0.8 }}
-                                style={styles.avatarGradient}
-                            />
-                            <Text style={styles.avatarText}>{initials}</Text>
-                        </View>
-                        <View style={styles.statusContainer}>
-                            <Text style={styles.statusLabel}>MEMBER STATUS</Text>
-                            <Text style={styles.statusValue}>{status}</Text>
-                        </View>
-                    </View>
+        <TouchableWithoutFeedback onPress={flip}>
+            <View style={styles.wrapper}>
 
-                    <View style={styles.footer}>
-                        <View>
+                {/* ── FRONT ─────────────────────────────────────────────── */}
+                <Animated.View style={[
+                    styles.card, styles.front,
+                    { transform: [{ rotateY: frontRotate }], opacity: frontOpacity },
+                ]}>
+                    <CardFace>
+                        {/* Top row */}
+                        <View style={styles.topRow}>
+                            {/* Avatar */}
+                            <View style={[styles.avatar, { borderColor: tier.ring }]}>
+                                <LinearGradient
+                                    colors={['#52525b', '#3f3f46']}
+                                    style={[StyleSheet.absoluteFillObject, { borderRadius: 40 }]}
+                                />
+                                {avatarUrl ? (
+                                    <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+                                ) : (
+                                    <Text style={styles.initials}>{initials}</Text>
+                                )}
+                            </View>
+
+                            {/* Member status */}
+                            <View style={styles.statusBlock}>
+                                <Text style={styles.statusLabel}>Member Status</Text>
+                                <Text style={[styles.statusValue, { color: tier.accent }]}>{label}</Text>
+                            </View>
+                        </View>
+
+                        {/* Bottom row */}
+                        <View style={styles.bottomRow}>
                             <Text style={styles.name}>{name}</Text>
-                            <Text style={styles.userId}>{userId}</Text>
+                            <View style={styles.footerRow}>
+                                <Text style={styles.userId}>{userId}</Text>
+                                <Text style={styles.logo}>NITEWAYS</Text>
+                            </View>
                         </View>
-                        <Text style={styles.logo}>NITEWAYS</Text>
-                    </View>
-
-                    <View style={styles.overlay} />
+                    </CardFace>
                 </Animated.View>
 
-                {/* Back Side */}
-                <Animated.View
-                    style={[
-                        styles.card,
-                        styles.cardBack,
-                        {
-                            transform: [{ rotateY: backInterpolate }],
-                            opacity: backOpacity,
-                        },
-                    ]}
-                >
-                    <LinearGradient
-                        colors={['#8A7730', '#B9993A']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFillObject}
-                    />
-                    <View style={styles.qrContainer}>
-                        <View style={styles.qrWrapper}>
-                            <Image
-                                source={{ uri: qrUrl }}
-                                style={styles.qrImage}
-                                resizeMode="contain"
-                            />
+                {/* ── BACK (QR) ─────────────────────────────────────────── */}
+                <Animated.View style={[
+                    styles.card, styles.back,
+                    { transform: [{ rotateY: backRotate }], opacity: backOpacity },
+                ]}>
+                    <CardFace>
+                        <View style={styles.qrContainer}>
+                            <View style={styles.qrBox}>
+                                <Image source={{ uri: qrUrl }} style={styles.qrImg} resizeMode="contain" />
+                            </View>
+                            <Text style={styles.backUserId}>{userId}</Text>
+                            <Text style={styles.backLogo}>NITEWAYS</Text>
                         </View>
-                        <Text style={styles.backUserId}>{userId}</Text>
-                        <Text style={styles.backLogo}>NITEWAYS</Text>
-                    </View>
-
-                    <View style={styles.overlay} />
+                    </CardFace>
                 </Animated.View>
+
             </View>
         </TouchableWithoutFeedback>
     );
 };
 
 const styles = StyleSheet.create({
-    cardWrapper: {
-        height: 220,
+    wrapper: {
+        height: 240,
         marginBottom: 24,
-        shadowColor: '#201f1fff',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.6,
+        shadowRadius: 20,
+        elevation: 14,
     },
     card: {
-        backgroundColor: 'transparent',
-        borderRadius: 20,
-        padding: 24,
-        height: 230,
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
+        top: 0, left: 0, right: 0,
+        height: 240,
+        borderRadius: 22,
         overflow: 'hidden',
         backfaceVisibility: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.15)', // subtle reflection
+        borderColor: 'rgba(255,255,255,0.10)',
+        padding: 24,
     },
-    cardFront: {
-        justifyContent: 'space-between',
-        zIndex: 2,
+    front: { justifyContent: 'space-between', zIndex: 2 },
+    back:  { justifyContent: 'center', alignItems: 'center', zIndex: 1 },
+
+    // Decorative orbs (bg-white/5 blur circles from Lovable)
+    orbTopRight: {
+        position: 'absolute',
+        top: 28, right: 28,
+        width: 120, height: 120,
+        borderRadius: 60,
+        backgroundColor: 'rgba(255,255,255,0.05)',
     },
-    cardBack: {
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1,
+    orbBottomLeft: {
+        position: 'absolute',
+        bottom: -10, left: 60,
+        width: 90, height: 90,
+        borderRadius: 45,
+        backgroundColor: 'rgba(255,255,255,0.04)',
     },
-    header: {
+
+    // Top row
+    topRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        zIndex: 2,
     },
-    avatarPlaceholder: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: '#333333',
+    avatar: {
+        width: 96,
+        height: 96,
+        borderRadius: 48,
+        borderWidth: 3,
+        overflow: 'hidden',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 4,
-        borderColor: '#dab12aff', // Warmer gold ring
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.8,
-        shadowRadius: 12, // Softer, more glowing shadow
-        elevation: 10,
     },
-    avatarGradient: {
-        ...StyleSheet.absoluteFillObject,
-        borderRadius: 50,
-    },
-    avatarText: {
-        color: '#a1a1a1ff',
-        fontSize: 42,
-        fontWeight: '700',
-        letterSpacing: 1.5,
+    avatarImg: { width: '100%', height: '100%' },
+    initials: {
+        color: '#a1a1aa',
+        fontSize: 30,
+        fontWeight: '600',
         zIndex: 2,
     },
-    statusContainer: {
-        alignItems: 'flex-end',
-    },
+    statusBlock: { alignItems: 'flex-end' },
     statusLabel: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 10,
-        letterSpacing: 1.5,
-        marginBottom: 4,
+        color: '#a1a1aa',
+        fontSize: 11,
         fontWeight: '500',
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
+        marginBottom: 3,
     },
     statusValue: {
-        color: '#f0ba0aff',
-        fontSize: 28,
-        fontWeight: '600',
-        letterSpacing: 1,
+        fontSize: 26,
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
-    footer: {
+
+    // Bottom rows
+    bottomRow: { gap: 5 },
+    name: {
+        color: '#ffffff',
+        fontSize: 22,
+        fontWeight: '700',
+        letterSpacing: 0.2,
+    },
+    footerRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-end',
-        zIndex: 2,
-    },
-    name: {
-        color: '#fff',
-        fontSize: 22,
-        fontWeight: '600',
-        marginBottom: 4,
-        letterSpacing: 0.5,
+        alignItems: 'center',
+        marginTop: 2,
     },
     userId: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 12,
-        letterSpacing: 1,
+        color: '#a1a1aa',
+        fontSize: 13,
+        fontFamily: 'monospace',
+        letterSpacing: 0.5,
     },
     logo: {
-        color: 'rgba(255,255,255,0.4)',
-        fontSize: 13,
+        color: '#71717a',
+        fontSize: 11,
         fontWeight: '600',
-        letterSpacing: 2.5,
+        letterSpacing: 2,
+        textTransform: 'uppercase',
     },
-    overlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.08)', // Slightly darker vignette for perfect white text contrast
-        borderWidth: 2,
-        borderColor: 'rgba(0,0,0,0.02)', // Inner texture
-        zIndex: 1,
-    },
-    // Back side styles
-    qrContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2,
-    },
-    qrWrapper: {
-        padding: 8,
+
+    // Back / QR
+    qrContainer: { alignItems: 'center', zIndex: 2 },
+    qrBox: {
         backgroundColor: '#fff',
         borderRadius: 12,
+        padding: 10,
         marginBottom: 12,
     },
-    qrImage: {
-        width: 120,
-        height: 120,
-    },
-    backUserId: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '600',
-        letterSpacing: 2,
-        marginBottom: 4,
-    },
-    backLogo: {
-        color: 'rgba(255,255,255,0.6)',
-        fontSize: 12,
-        fontWeight: 'bold',
-        letterSpacing: 2,
-    },
+    qrImg:      { width: 120, height: 120 },
+    backUserId: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 2, marginBottom: 3 },
+    backLogo:   { color: '#a1a1aa', fontSize: 10, fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase' },
 });
 
 export default MemberCard;

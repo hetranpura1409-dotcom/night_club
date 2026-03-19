@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     },
     // Hero
     heroContainer: {
-        height: Dimensions.get('window').height * 0.30,
+        height: Dimensions.get('window').height * 0.22,
         backgroundColor: '#1A1A2E',
     },
     heroImage: {

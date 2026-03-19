@@ -1,8 +1,9 @@
+/**
+ * FavoritesContext — 100% local storage, no API calls.
+ * Favorites are persisted to AsyncStorage so they survive app restarts.
+ */
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
-import api from '../services/api';
 import { Nightclub } from '../types';
 
 interface FavoritesContextType {
@@ -13,104 +14,67 @@ interface FavoritesContextType {
     refreshFavorites: () => void;
 }
 
-const FAVORITES_CACHE_KEY = '@favorites_cache';
+const STORAGE_KEY = '@niteways_favorites';
 
 const FavoritesContext = createContext<FavoritesContextType>({
     favorites: [],
-    toggleFavorite: () => { },
+    toggleFavorite: () => {},
     isFavorite: () => false,
     loading: false,
-    refreshFavorites: () => { },
+    refreshFavorites: () => {},
 });
 
 export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const navigation = useNavigation<any>();
     const [favorites, setFavorites] = useState<Nightclub[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading]     = useState(true);
 
-    // Load favorites from API (with local cache fallback)
+    // Load from AsyncStorage on mount
     const loadFavorites = useCallback(async () => {
         try {
-            setLoading(true);
-            const response = await api.get('/favorites');
-            const favItems = response.data;
-
-            // Extract nightclub data from the favorites response
-            const nightclubs: Nightclub[] = favItems
-                .filter((fav: any) => fav.nightclub)
-                .map((fav: any) => fav.nightclub);
-
-            setFavorites(nightclubs);
-
-            // Cache locally
-            await AsyncStorage.setItem(FAVORITES_CACHE_KEY, JSON.stringify(nightclubs));
-        } catch (error) {
-            console.log('Could not load favorites from API, using cache:', error);
-            // Fallback to local cache
-            try {
-                const cached = await AsyncStorage.getItem(FAVORITES_CACHE_KEY);
-                if (cached) {
-                    setFavorites(JSON.parse(cached));
-                }
-            } catch (cacheError) {
-                console.error('Error loading favorites cache:', cacheError);
-            }
+            const raw = await AsyncStorage.getItem(STORAGE_KEY);
+            if (raw) setFavorites(JSON.parse(raw));
+        } catch (e) {
+            console.warn('FavoritesContext: failed to load from storage', e);
         } finally {
             setLoading(false);
         }
     }, []);
 
-    useEffect(() => {
-        loadFavorites();
-    }, [loadFavorites]);
+    useEffect(() => { loadFavorites(); }, [loadFavorites]);
 
-    const toggleFavorite = useCallback(async (venue: Nightclub) => {
-        const exists = favorites.some(v => v.id === venue.id);
-
-        // Optimistic update
-        if (exists) {
-            setFavorites(prev => prev.filter(v => v.id !== venue.id));
-        } else {
-            setFavorites(prev => [...prev, venue]);
-        }
-
+    // Persist whenever favorites change
+    const persist = useCallback(async (updated: Nightclub[]) => {
         try {
-            if (exists) {
-                await api.delete(`/favorites/${venue.id}`);
-            } else {
-                await api.post(`/favorites/${venue.id}`);
-            }
-
-            // Update cache
-            const updated = exists
-                ? favorites.filter(v => v.id !== venue.id)
-                : [...favorites, venue];
-            await AsyncStorage.setItem(FAVORITES_CACHE_KEY, JSON.stringify(updated));
-        } catch (error: any) {
-            console.error('Error toggling favorite:', error);
-            // Revert optimistic update on error
-            if (exists) {
-                setFavorites(prev => [...prev, venue]);
-            } else {
-                setFavorites(prev => prev.filter(v => v.id !== venue.id));
-            }
-
-            if (error?.response?.status === 401) {
-                // Ignore TS error since we don't have global navigation types strictly setup inside context
-                // @ts-ignore
-                navigation.navigate('Login');
-            } else {
-                Alert.alert("Error", "We couldn't save your favorite right now. Please try again.");
-            }
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        } catch (e) {
+            console.warn('FavoritesContext: failed to persist', e);
         }
-    }, [favorites, navigation]);
+    }, []);
 
-    const isFavorite = useCallback((venueId: number) => {
-        return favorites.some(v => v.id === venueId);
-    }, [favorites]);
+    const toggleFavorite = useCallback((venue: Nightclub) => {
+        setFavorites(prev => {
+            const exists = prev.some(v => v.id === venue.id);
+            const updated = exists
+                ? prev.filter(v => v.id !== venue.id)
+                : [...prev, venue];
+            persist(updated);
+            return updated;
+        });
+    }, [persist]);
+
+    const isFavorite = useCallback(
+        (venueId: number) => favorites.some(v => v.id === venueId),
+        [favorites],
+    );
 
     return (
-        <FavoritesContext.Provider value={{ favorites, toggleFavorite, isFavorite, loading, refreshFavorites: loadFavorites }}>
+        <FavoritesContext.Provider value={{
+            favorites,
+            toggleFavorite,
+            isFavorite,
+            loading,
+            refreshFavorites: loadFavorites,
+        }}>
             {children}
         </FavoritesContext.Provider>
     );

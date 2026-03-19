@@ -1,12 +1,22 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { StatusBar } from 'react-native';
+import { StatusBar, LogBox } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 import MAPBOX_ACCESS_TOKEN from './config/mapbox';
 
+// Suppress known MapLibre/Mapbox deprecation warnings that appear in LogBox.
+// These are expected — we intentionally use the MapLibre backend because
+// the official Mapbox v10 SDK causes Kotlin compilation errors on this setup.
+LogBox.ignoreLogs([
+    '@rnmapbox/maps: Non v10 implementations are deprecated',
+    'Mapbox warning setAccessToken requires setWellKnownTileServer',
+    'setAccessToken requires setWellKnownTileServer',
+]);
+
 // Initialize Mapbox once at app startup — before any screen renders
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN);
+Mapbox.setTelemetryEnabled(false);
 
 // Import screens
 import SplashScreen from './screens/SplashScreen';

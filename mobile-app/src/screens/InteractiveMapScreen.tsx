@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,16 +8,28 @@ import {
     ScrollView,
     StatusBar,
     Dimensions,
-    FlatList,
     Image,
     Platform,
+    Animated,
+    PermissionsAndroid,
 } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
+import Geolocation from 'react-native-geolocation-service';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Nightclub } from '../types';
 import BottomNav from '../components/BottomNav';
 import { MOCK_VENUES } from '../data/mockVenues';
+import { MOCK_MAP_EVENTS } from '../data/mockEvents';
 import MAPBOX_ACCESS_TOKEN from '../config/mapbox';
+
+// ── Colors ────────────────────────────────────────────────────────────────────
+const CLUB_COLOR        = '#F7C948';   // gold
+const CLUB_BORDER       = '#C8981A';
+const CLUB_ACTIVE_COLOR = '#FFFFFF';   // white when selected
+
+const EVENT_COLOR        = '#A855F7';  // vivid purple
+const EVENT_BORDER       = '#7C3AED';
+const EVENT_ACTIVE_COLOR = '#F0ABFC';  // light lavender when selected
 
 // Base URL to fetch the Mapbox style JSON
 const STYLE_FETCH_URL = `https://api.mapbox.com/styles/v1/mapbox/dark-v10?access_token=${MAPBOX_ACCESS_TOKEN}`;
@@ -33,28 +45,25 @@ async function fetchMapboxStyleAsHTTPS(): Promise<string> {
     const style = await res.json();
 
     // Sprites  e.g. mapbox://sprites/mapbox/dark-v10
-    // Maps to https://api.mapbox.com/styles/v1/{user}/{style}/sprite
     if (typeof style.sprite === 'string' && style.sprite.startsWith('mapbox://sprites/')) {
         const spritePath = style.sprite.replace('mapbox://sprites/', '');
         style.sprite = `https://api.mapbox.com/styles/v1/${spritePath}/sprite?access_token=${MAPBOX_ACCESS_TOKEN}`;
     }
 
     // Glyphs  e.g. mapbox://fonts/mapbox/{fontstack}/{range}.pbf
-    // Preserve the username (mapbox/) that follows "fonts/" in the original URL.
     if (typeof style.glyphs === 'string' && style.glyphs.startsWith('mapbox://fonts/')) {
         style.glyphs =
             style.glyphs.replace('mapbox://fonts/', 'https://api.mapbox.com/fonts/v1/') +
             `?access_token=${MAPBOX_ACCESS_TOKEN}`;
     }
 
-    // Tile sources  e.g. { "url": "mapbox://mapbox.mapbox-streets-v8" }
+    // Tile sources
     if (style.sources) {
         for (const src of Object.values(style.sources) as any[]) {
             if (typeof src.url === 'string' && src.url.startsWith('mapbox://')) {
                 const tileset = src.url.replace('mapbox://', '');
                 src.url = `https://api.mapbox.com/v4/${tileset}.json?access_token=${MAPBOX_ACCESS_TOKEN}`;
             }
-            // Inline tile URL arrays
             if (Array.isArray(src.tiles)) {
                 src.tiles = src.tiles.map((t: string) =>
                     t.startsWith('mapbox://') ? t.replace('mapbox://', 'https://api.mapbox.com/v4/') : t
@@ -66,192 +75,494 @@ async function fetchMapboxStyleAsHTTPS(): Promise<string> {
     return JSON.stringify(style);
 }
 
+// ── Unified map item type ─────────────────────────────────────────────────────
+type MapItemType = 'club' | 'event';
+
+interface MapItem {
+    id: string;
+    type: MapItemType;
+    name: string;
+    subtitle: string;   // city for club, venue name for event
+    detail: string;     // priceLevel for club, category for event
+    imageUrl: string;
+    latitude: number;
+    longitude: number;
+    raw: Nightclub | MapEvent;
+}
+
+// ── Screen setup ──────────────────────────────────────────────────────────────
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.8;
-const CARD_MARGIN = 10;
-const SNAP_INTERVAL = CARD_WIDTH + (CARD_MARGIN * 2);
+
+type CategoryFilter = 'all' | 'clubs' | 'events';
+
+const categoryFilters: { id: CategoryFilter; label: string; icon: string }[] = [
+    { id: 'all',    label: 'All',        icon: 'layers-outline'        },
+    { id: 'clubs',  label: 'Nightclubs', icon: 'musical-notes-outline' },
+    { id: 'events', label: 'Events',     icon: 'calendar-outline'      },
+];
 
 interface InteractiveMapScreenProps {
     navigation: any;
 }
 
-type CategoryFilter = 'all' | 'Nightclub' | 'events';
-
-const categoryFilters: { id: CategoryFilter; label: string }[] = [
-    { id: 'all', label: 'All' },
-    { id: 'Nightclub', label: 'Nightclub' },
-    { id: 'events', label: 'Events' },
-];
-
 const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation }) => {
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery]           = useState('');
     const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
-    const [selectedVenue, setSelectedVenue] = useState<Nightclub | null>(null);
-    const [mapStyle, setMapStyle] = useState<string | null>(null);
-    const mapCamera = useRef<any>(null);
-    const flatListRef = useRef<FlatList>(null);
+    const [selectedItem, setSelectedItem]         = useState<MapItem | null>(null);
+    const [mapStyle, setMapStyle]                 = useState<string | null>(null);
+    const [zoomLevel, setZoomLevel]               = useState(5);
+    const [userLocation, setUserLocation]         = useState<[number, number] | null>(null);
+    const [followUser, setFollowUser]             = useState(true); // camera follows on first fix
+    const mapCamera      = useRef<any>(null);
+    const popupAnim      = useRef(new Animated.Value(200)).current;
+    const pulseAnim      = useRef(new Animated.Value(1)).current;   // for location dot pulse
+    const watchId        = useRef<number | null>(null);
 
-    // Fetch Mapbox style once, rewriting all mapbox:// URIs to HTTPS
+    // Fetch Mapbox style once
     useEffect(() => {
         fetchMapboxStyleAsHTTPS()
             .then(setMapStyle)
-            .catch(() => {
-                // On failure fall back to direct HTTPS URL (tiles will load, sprites may warn)
-                setMapStyle(STYLE_FETCH_URL);
-            });
+            .catch(() => setMapStyle(STYLE_FETCH_URL));
     }, []);
 
-    // Filter venues
-    const filteredVenues = useMemo(() => {
-        let filtered = MOCK_VENUES.filter(v => v.latitude && v.longitude);
+    // ── Pulsing animation for user-location dot ────────────────────────────────
+    useEffect(() => {
+        const pulse = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1.8, duration: 900, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1,   duration: 900, useNativeDriver: true }),
+            ])
+        );
+        pulse.start();
+        return () => pulse.stop();
+    }, []);
 
-        if (selectedCategory !== 'all' && selectedCategory !== 'events') {
-            filtered = filtered.filter(v => v.category === selectedCategory);
-        }
+    // ── Request location permission + start watching ───────────────────────────
+    const requestAndWatch = useCallback(async () => {
+        try {
+            if (Platform.OS === 'android') {
+                const granted = await PermissionsAndroid.request(
+                    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                    {
+                        title: 'Location Permission',
+                        message: 'Niteways needs your location to show you on the map.',
+                        buttonPositive: 'Allow',
+                        buttonNegative: 'Deny',
+                    }
+                );
+                if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+            }
 
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(
-                v =>
-                    v.name.toLowerCase().includes(query) ||
-                    v.city.toLowerCase().includes(query) ||
-                    v.tags?.some(tag => tag.toLowerCase().includes(query))
+            watchId.current = Geolocation.watchPosition(
+                (pos) => {
+                    const coords: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+                    setUserLocation(coords);
+                    // Auto-follow until user manually pans
+                    if (followUser) {
+                        mapCamera.current?.setCamera({
+                            centerCoordinate: coords,
+                            zoomLevel: 14,
+                            animationDuration: 800,
+                        });
+                    }
+                },
+                (err) => {
+                    // Silently ignore — user may have denied or GPS unavailable
+                    console.warn('Location watch error:', err.message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    distanceFilter: 5,       // update every 5 metres moved
+                    interval: 3000,
+                    fastestInterval: 1000,
+                }
             );
+        } catch (e) {
+            console.warn('Location permission error:', e);
         }
-
-        return filtered;
-    }, [searchQuery, selectedCategory]);
+    }, [followUser]);
 
     useEffect(() => {
-        if (filteredVenues.length > 0 && !selectedVenue) {
-            setSelectedVenue(filteredVenues[0]);
-        }
-    }, [filteredVenues]);
+        requestAndWatch();
+        return () => {
+            if (watchId.current !== null) {
+                Geolocation.clearWatch(watchId.current);
+            }
+        };
+    }, []);
 
-    const handleVenuePress = (venue: Nightclub, index: number) => {
-        setSelectedVenue(venue);
-        mapCamera.current?.setCamera({
-            centerCoordinate: [venue.longitude!, venue.latitude!],
-            zoomLevel: 14,
-            animationDuration: 1000,
-        });
-        flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    // ── Locate Me: re-centre camera and resume following ─────────────────────
+    const handleLocateMe = () => {
+        setFollowUser(true);
+        if (userLocation) {
+            mapCamera.current?.setCamera({
+                centerCoordinate: userLocation,
+                zoomLevel: 15,
+                animationDuration: 600,
+            });
+        } else {
+            // No fix yet — request fresh
+            requestAndWatch();
+        }
     };
 
-    const renderVenueCard = ({ item, index }: { item: Nightclub; index: number }) => (
-        <TouchableOpacity
-            style={[
-                styles.card,
-                selectedVenue?.id === item.id && styles.activeCard
-            ]}
-            onPress={() => handleVenuePress(item, index)}
-            activeOpacity={0.9}
-        >
-            <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
-            <View style={styles.cardContent}>
-                <View style={styles.cardHeader}>
-                    <Text style={styles.cardName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.cardPrice}>{item.priceLevel}</Text>
-                </View>
-                <View style={styles.cardMeta}>
-                    <Icon name="location" size={12} color="#9CA3AF" />
-                    <Text style={styles.cardCity}>{item.city}</Text>
-                    <View style={styles.dot} />
-                    <Text style={styles.cardCategory}>{item.category}</Text>
-                </View>
-                <TouchableOpacity
-                    style={styles.bookButton}
-                    onPress={() => navigation.navigate('VenueDetail', { club: item })}
-                >
-                    <Text style={styles.bookButtonText}>Explore Venue</Text>
-                </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
-    );
-
-    const onScroll = (event: any) => {
-        const x = event.nativeEvent.contentOffset.x;
-        const index = Math.round(x / SNAP_INTERVAL);
-        if (filteredVenues[index] && filteredVenues[index].id !== selectedVenue?.id) {
-            const venue = filteredVenues[index];
-            setSelectedVenue(venue);
-            mapCamera.current?.setCamera({
-                centerCoordinate: [venue.longitude!, venue.latitude!],
-                zoomLevel: 14,
-                animationDuration: 1000,
-            });
+    // Animate popup in/out when selectedItem changes
+    useEffect(() => {
+        if (selectedItem) {
+            Animated.spring(popupAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+                tension: 80,
+                friction: 10,
+            }).start();
+        } else {
+            Animated.timing(popupAnim, {
+                toValue: 200,
+                duration: 220,
+                useNativeDriver: true,
+            }).start();
         }
+    }, [selectedItem]);
+
+    // ── Build unified list of MapItems ────────────────────────────────────────
+    const allItems = useMemo<MapItem[]>(() => {
+        const clubs: MapItem[] = MOCK_VENUES
+            .filter(v => v.latitude && v.longitude)
+            .map(v => ({
+                id:        `club-${v.id}`,
+                type:      'club' as MapItemType,
+                name:      v.name,
+                subtitle:  v.city,
+                detail:    v.priceLevel ?? '',
+                imageUrl:  v.imageUrl,
+                latitude:  v.latitude!,
+                longitude: v.longitude!,
+                raw:       v,
+            }));
+
+        const events: MapItem[] = MOCK_MAP_EVENTS.map(e => ({
+            id:        `event-${e.id}`,
+            type:      'event' as MapItemType,
+            name:      e.name,
+            subtitle:  e.venue,
+            detail:    e.category,
+            imageUrl:  e.image,
+            latitude:  e.latitude,
+            longitude: e.longitude,
+            raw:       e,
+        }));
+
+        return [...clubs, ...events];
+    }, []);
+
+    // ── Apply search + category filter ────────────────────────────────────────
+    const filteredItems = useMemo<MapItem[]>(() => {
+        let items = allItems;
+        if (selectedCategory === 'clubs')  items = items.filter(i => i.type === 'club');
+        if (selectedCategory === 'events') items = items.filter(i => i.type === 'event');
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            items = items.filter(i =>
+                i.name.toLowerCase().includes(q) ||
+                i.subtitle.toLowerCase().includes(q) ||
+                i.detail.toLowerCase().includes(q)
+            );
+        }
+        return items;
+    }, [allItems, selectedCategory, searchQuery]);
+
+    const filteredClubs  = useMemo(() => filteredItems.filter(i => i.type === 'club'),  [filteredItems]);
+    const filteredEvents = useMemo(() => filteredItems.filter(i => i.type === 'event'), [filteredItems]);
+
+    // ── GeoJSON for GPU-rendered circles ──────────────────────────────────────
+    const clubGeoJSON = useMemo(() => ({
+        type: 'FeatureCollection' as const,
+        features: filteredClubs.map(item => ({
+            type: 'Feature' as const,
+            id: item.id,
+            geometry: { type: 'Point' as const, coordinates: [item.longitude, item.latitude] },
+            properties: { itemId: item.id, isActive: selectedItem?.id === item.id },
+        })),
+    }), [filteredClubs, selectedItem?.id]);
+
+    const eventGeoJSON = useMemo(() => ({
+        type: 'FeatureCollection' as const,
+        features: filteredEvents.map(item => ({
+            type: 'Feature' as const,
+            id: item.id,
+            geometry: { type: 'Point' as const, coordinates: [item.longitude, item.latitude] },
+            properties: { itemId: item.id, isActive: selectedItem?.id === item.id },
+        })),
+    }), [filteredEvents, selectedItem?.id]);
+
+    // ── Handlers ──────────────────────────────────────────────────────────────
+    const handleMarkerTap = (item: MapItem) => {
+        setSelectedItem(item);
+        mapCamera.current?.setCamera({
+            centerCoordinate: [item.longitude, item.latitude],
+            zoomLevel: 14,
+            animationDuration: 700,
+        });
+    };
+
+    const dismissPopup = () => setSelectedItem(null);
+
+    const handleShapePress = (e: any, items: MapItem[]) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const itemId = feature.properties?.itemId;
+        const item = items.find(i => i.id === itemId);
+        if (item) handleMarkerTap(item);
+    };
+
+    const handleGoToDetail = (item: MapItem) => {
+        if (item.type === 'club') {
+            navigation.navigate('VenueDetail', { club: item.raw });
+        } else {
+            navigation.navigate('Events');
+        }
+    };
+
+    // ── User-location GeoJSON (single point, updates with GPS) ────────────────
+    const userGeoJSON = useMemo(() => ({
+        type: 'FeatureCollection' as const,
+        features: userLocation ? [{
+            type: 'Feature' as const,
+            id: 'user',
+            geometry: { type: 'Point' as const, coordinates: userLocation },
+            properties: {},
+        }] : [],
+    }), [userLocation]);
+
+    // ── Zoom controls ─────────────────────────────────────────────────────────
+    const MAX_ZOOM = 20;
+    const MIN_ZOOM = 2;
+
+    const handleZoomIn = () => {
+        const next = Math.min(zoomLevel + 1.5, MAX_ZOOM);
+        setZoomLevel(next);
+        mapCamera.current?.setCamera({ zoomLevel: next, animationDuration: 300 });
+    };
+
+    const handleZoomOut = () => {
+        const next = Math.max(zoomLevel - 1.5, MIN_ZOOM);
+        setZoomLevel(next);
+        mapCamera.current?.setCamera({ zoomLevel: next, animationDuration: 300 });
+    };
+
+    // ── Camera default ────────────────────────────────────────────────────────
+    const cameraCenter = filteredItems.length > 0
+        ? [filteredItems[0].longitude, filteredItems[0].latitude]
+        : [2.3522, 48.8566];
+
+    // ── Popup card ────────────────────────────────────────────────────────────
+    const renderPopup = () => {
+        if (!selectedItem) return null;
+        const isEvent   = selectedItem.type === 'event';
+        const accent    = isEvent ? EVENT_COLOR : CLUB_COLOR;
+        const badgeBg   = isEvent ? '#2D1057' : '#3D2800';
+
+        return (
+            <Animated.View
+                style={[styles.popup, { transform: [{ translateY: popupAnim }] }]}
+            >
+                {/* Close button */}
+                <TouchableOpacity style={styles.popupClose} onPress={dismissPopup} activeOpacity={0.7}>
+                    <Icon name="close" size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+
+                <View style={styles.popupInner}>
+                    <Image source={{ uri: selectedItem.imageUrl }} style={styles.popupImage} />
+                    <View style={styles.popupContent}>
+                        {/* Badge + detail */}
+                        <View style={styles.popupBadgeRow}>
+                            <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
+                                <Icon
+                                    name={isEvent ? 'calendar-outline' : 'musical-notes-outline'}
+                                    size={10}
+                                    color={accent}
+                                />
+                                <Text style={[styles.typeBadgeText, { color: accent }]}>
+                                    {isEvent ? 'EVENT' : 'NIGHTCLUB'}
+                                </Text>
+                            </View>
+                            <Text style={[styles.popupDetail, { color: accent }]}>
+                                {selectedItem.detail}
+                            </Text>
+                        </View>
+
+                        {/* Name */}
+                        <Text style={styles.popupName} numberOfLines={1}>
+                            {selectedItem.name}
+                        </Text>
+
+                        {/* Location */}
+                        <View style={styles.popupMeta}>
+                            <Icon name="location-outline" size={12} color="#9CA3AF" />
+                            <Text style={styles.popupSubtitle}>{selectedItem.subtitle}</Text>
+                        </View>
+
+                        {/* CTA */}
+                        <TouchableOpacity
+                            style={[styles.ctaButton, { backgroundColor: accent }]}
+                            onPress={() => handleGoToDetail(selectedItem)}
+                            activeOpacity={0.8}
+                        >
+                            <Text style={styles.ctaText}>
+                                {isEvent ? 'View Event' : 'Explore Venue'}
+                            </Text>
+                            <Icon name="arrow-forward" size={13} color="#000" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Animated.View>
+        );
     };
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-            {/* Full Screen Mapbox Map — renders once the HTTPS-patched style JSON is ready */}
+            {/* Full-screen map */}
             {mapStyle ? (
-            <Mapbox.MapView
-                style={styles.map}
-                styleURL={mapStyle}
-                logoEnabled={false}
-                compassEnabled
-            >
-                <Mapbox.Camera
-                    ref={mapCamera}
-                    zoomLevel={12}
-                    centerCoordinate={
-                        selectedVenue && selectedVenue.longitude && selectedVenue.latitude
-                            ? [selectedVenue.longitude, selectedVenue.latitude]
-                            : filteredVenues.length > 0
-                                ? [filteredVenues[0].longitude!, filteredVenues[0].latitude!]
-                                : [2.3522, 48.8566] // fallback (Paris)
-                    }
-                    animationDuration={0}
-                />
+                <Mapbox.MapView
+                    style={styles.map}
+                    styleURL={mapStyle}
+                    logoEnabled={false}
+                    compassEnabled
+                    zoomEnabled
+                    scrollEnabled
+                    rotateEnabled
+                    onTouchStart={() => setFollowUser(false)}
+                >
+                    <Mapbox.Camera
+                        ref={mapCamera}
+                        zoomLevel={zoomLevel}
+                        centerCoordinate={cameraCenter}
+                        animationDuration={0}
+                    />
 
-                {filteredVenues.map((venue) => (
-                    <Mapbox.PointAnnotation
-                        key={venue.id}
-                        id={String(venue.id)}
-                        coordinate={[venue.longitude!, venue.latitude!]}
-                        onSelected={() => {
-                            const index = filteredVenues.findIndex(v => v.id === venue.id);
-                            if (index !== -1) {
-                                handleVenuePress(venue, index);
-                            }
-                        }}
+                    {/* ── NIGHTCLUB markers — gold circles ───────────────── */}
+                    <Mapbox.ShapeSource
+                        id="clubSource"
+                        shape={clubGeoJSON}
+                        onPress={(e: any) => handleShapePress(e, filteredClubs)}
                     >
-                        <View style={styles.markerContainer}>
-                            <View style={[
-                                styles.markerPulse,
-                                selectedVenue?.id === venue.id && styles.markerPulseActive
-                            ]} />
-                            <View style={[
-                                styles.markerDot,
-                                selectedVenue?.id === venue.id && styles.markerDotActive
-                            ]} />
-                        </View>
-                    </Mapbox.PointAnnotation>
-                ))}
-            </Mapbox.MapView>
+                        <Mapbox.CircleLayer
+                            id="clubInactive"
+                            filter={['!', ['to-boolean', ['get', 'isActive']]]}
+                            style={{
+                                circleRadius: 4,
+                                circleColor: CLUB_COLOR,
+                                circleStrokeWidth: 1,
+                                circleStrokeColor: CLUB_BORDER,
+                                circlePitchAlignment: 'map',
+                            }}
+                        />
+                        <Mapbox.CircleLayer
+                            id="clubActive"
+                            filter={['to-boolean', ['get', 'isActive']]}
+                            style={{
+                                circleRadius: 6,
+                                circleColor: CLUB_ACTIVE_COLOR,
+                                circleStrokeWidth: 1.5,
+                                circleStrokeColor: CLUB_COLOR,
+                                circlePitchAlignment: 'map',
+                            }}
+                        />
+                    </Mapbox.ShapeSource>
+
+                    {/* ── EVENT markers — purple circles ─────────────────── */}
+                    <Mapbox.ShapeSource
+                        id="eventSource"
+                        shape={eventGeoJSON}
+                        onPress={(e: any) => handleShapePress(e, filteredEvents)}
+                    >
+                        <Mapbox.CircleLayer
+                            id="eventInactive"
+                            filter={['!', ['to-boolean', ['get', 'isActive']]]}
+                            style={{
+                                circleRadius: 4,
+                                circleColor: EVENT_COLOR,
+                                circleStrokeWidth: 1,
+                                circleStrokeColor: EVENT_BORDER,
+                                circlePitchAlignment: 'map',
+                            }}
+                        />
+                        <Mapbox.CircleLayer
+                            id="eventActive"
+                            filter={['to-boolean', ['get', 'isActive']]}
+                            style={{
+                                circleRadius: 6,
+                                circleColor: EVENT_ACTIVE_COLOR,
+                                circleStrokeWidth: 1.5,
+                                circleStrokeColor: EVENT_COLOR,
+                                circlePitchAlignment: 'map',
+                            }}
+                        />
+                    </Mapbox.ShapeSource>
+
+                    {/* ── USER LOCATION — blue pulsing dot ───────────────── */}
+                    {userLocation && (
+                        <Mapbox.ShapeSource id="userSource" shape={userGeoJSON}>
+                            {/* Outer glow ring */}
+                            <Mapbox.CircleLayer
+                                id="userGlow"
+                                style={{
+                                    circleRadius: 18,
+                                    circleColor: 'rgba(59, 130, 246, 0.15)',
+                                    circleStrokeWidth: 0,
+                                    circlePitchAlignment: 'map',
+                                }}
+                            />
+                            {/* Inner solid dot */}
+                            <Mapbox.CircleLayer
+                                id="userDot"
+                                style={{
+                                    circleRadius: 7,
+                                    circleColor: '#3B82F6',
+                                    circleStrokeWidth: 2.5,
+                                    circleStrokeColor: '#FFFFFF',
+                                    circlePitchAlignment: 'map',
+                                }}
+                            />
+                        </Mapbox.ShapeSource>
+                    )}
+                </Mapbox.MapView>
             ) : (
                 <View style={[styles.map, styles.mapLoading]}>
                     <Text style={styles.mapLoadingText}>Loading map…</Text>
                 </View>
             )}
 
-            {/* Overlays */}
+            {/* ── Overlays ───────────────────────────────────────────────── */}
             <View style={styles.overlay}>
-                {/* Search Bar */}
+
+                {/* Search + filter bar */}
                 <View style={styles.searchSection}>
+                    {/* Glass-morphism search bar — layered approach */}
                     <View style={styles.searchContainer}>
-                        <Icon name="search" size={20} color="#9CA3AF" />
+                        {/* Dark tinted base layer */}
+                        <View style={styles.searchGlassBase} pointerEvents="none" />
+                        {/* Bright edge highlight (top) */}
+                        <View style={styles.searchGlassHighlight} pointerEvents="none" />
+                        <Icon name="search" size={16} color="#C0C4CC" style={styles.searchIcon} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search high-end clubs..."
-                            placeholderTextColor="#6B7280"
+                            placeholder="Search venues, clubs, events..."
+                            placeholderTextColor="#5A5F6B"
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                         />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity
+                                style={styles.searchClearBtn}
+                                onPress={() => setSearchQuery('')}
+                                activeOpacity={0.7}
+                            >
+                                <Icon name="close" size={13} color="#9CA3AF" />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
                     <ScrollView
@@ -259,42 +570,73 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={styles.filterList}
                     >
-                        {categoryFilters.map(filter => (
-                            <TouchableOpacity
-                                key={filter.id}
-                                style={[
-                                    styles.filterChip,
-                                    selectedCategory === filter.id && styles.filterChipActive
-                                ]}
-                                onPress={() => setSelectedCategory(filter.id)}
-                            >
-                                <Text style={[
-                                    styles.filterText,
-                                    selectedCategory === filter.id && styles.filterTextActive
-                                ]}>{filter.label}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {categoryFilters.map(filter => {
+                            const isActive  = selectedCategory === filter.id;
+                            const chipColor =
+                                filter.id === 'clubs'  ? CLUB_COLOR  :
+                                filter.id === 'events' ? EVENT_COLOR : '#FFFFFF';
+                            return (
+                                <TouchableOpacity
+                                    key={filter.id}
+                                    style={[
+                                        styles.filterChip,
+                                        isActive && { backgroundColor: chipColor, borderColor: chipColor },
+                                    ]}
+                                    onPress={() => setSelectedCategory(filter.id)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Icon
+                                        name={filter.icon}
+                                        size={13}
+                                        color={isActive ? '#000' : '#9CA3AF'}
+                                        style={styles.filterIcon}
+                                    />
+                                    <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
+                                        {filter.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </ScrollView>
+
                 </View>
 
-                {/* Bottom Carousel */}
-                <View style={styles.carouselContainer}>
-                    <FlatList
-                        ref={flatListRef}
-                        data={filteredVenues}
-                        renderItem={renderVenueCard}
-                        keyExtractor={(item) => item.id.toString()}
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        snapToInterval={SNAP_INTERVAL}
-                        decelerationRate="fast"
-                        contentContainerStyle={styles.carouselContent}
-                        onMomentumScrollEnd={onScroll}
+                {/* ── Locate Me FAB ────────────────────────────────────── */}
+                <TouchableOpacity
+                    style={[styles.locateMeBtn, followUser && userLocation && styles.locateMeBtnActive]}
+                    onPress={handleLocateMe}
+                    activeOpacity={0.8}
+                >
+                    <Icon
+                        name={followUser && userLocation ? 'navigate' : 'navigate-outline'}
+                        size={20}
+                        color={followUser && userLocation ? '#000' : '#fff'}
                     />
+                </TouchableOpacity>
+
+                {/* ── Zoom controls — top-right, below search bar ──────── */}
+                <View style={styles.zoomControls} pointerEvents="box-none">
+                    <TouchableOpacity
+                        style={[styles.zoomBtn, zoomLevel >= MAX_ZOOM && styles.zoomBtnDisabled]}
+                        onPress={handleZoomIn}
+                        activeOpacity={0.75}
+                    >
+                        <Icon name="add" size={20} color={zoomLevel >= MAX_ZOOM ? '#4B5563' : '#fff'} />
+                    </TouchableOpacity>
+                    <View style={styles.zoomDivider} />
+                    <TouchableOpacity
+                        style={[styles.zoomBtn, zoomLevel <= MIN_ZOOM && styles.zoomBtnDisabled]}
+                        onPress={handleZoomOut}
+                        activeOpacity={0.75}
+                    >
+                        <Icon name="remove" size={20} color={zoomLevel <= MIN_ZOOM ? '#4B5563' : '#fff'} />
+                    </TouchableOpacity>
                 </View>
+
+                {/* Single popup card — slides up when a marker is tapped */}
+                {renderPopup()}
             </View>
 
-            {/* Bottom Navigation */}
             <BottomNav activeTab="Map" navigation={navigation} />
         </View>
     );
@@ -314,178 +656,277 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     mapLoadingText: {
-        color: '#F7C948',
+        color: CLUB_COLOR,
         fontSize: 14,
     },
     overlay: {
         ...StyleSheet.absoluteFillObject,
         pointerEvents: 'box-none',
     },
+    // ── Search + filters ─────────────────────────────────────────────────────
     searchSection: {
-        paddingTop: Platform.OS === 'ios' ? 60 : 50,
-        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'ios' ? 60 : (StatusBar.currentHeight ?? 0) + 10,
+        paddingHorizontal: 16,
     },
     searchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(28, 28, 30, 0.95)',
-        borderRadius: 15,
-        paddingHorizontal: 15,
-        height: 50,
+        borderRadius: 30,
+        paddingLeft: 16,
+        paddingRight: 8,
+        height: 48,
+        // Outer border — subtle bright rim like glass edge
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        marginBottom: 15,
+        borderColor: 'rgba(255, 255, 255, 0.20)',
+        marginBottom: 12,
+        overflow: 'hidden',
+        // Deep shadow for floating depth
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.45,
+        shadowRadius: 14,
+        elevation: 8,
+    },
+    // Primary dark-glass base fill
+    searchGlassBase: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(8, 8, 14, 0.72)',
+        borderRadius: 30,
+    },
+    // Bright shimmer along the top edge — the "glass" illusion
+    searchGlassHighlight: {
+        position: 'absolute',
+        top: 0,
+        left: 20,
+        right: 20,
+        height: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.28)',
+        borderRadius: 1,
+    },
+    searchIcon: {
+        marginRight: 2,
+        zIndex: 1,
     },
     searchInput: {
         flex: 1,
-        color: '#fff',
-        marginLeft: 10,
-        fontSize: 16,
+        color: '#EAEAEA',
+        paddingLeft: 8,
+        paddingRight: 4,
+        fontSize: 14,
+        zIndex: 1,
+    },
+    searchClearBtn: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 4,
+        zIndex: 1,
     },
     filterList: {
-        gap: 10,
+        gap: 8,
+        paddingBottom: 4,
     },
     filterChip: {
-        paddingHorizontal: 20,
-        paddingVertical: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 7,
         borderRadius: 20,
-        backgroundColor: 'rgba(28, 28, 30, 0.95)',
+        backgroundColor: 'rgba(18, 18, 20, 0.96)',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: 'rgba(255,255,255,0.12)',
     },
-    filterChipActive: {
-        backgroundColor: '#F7C948',
-        borderColor: '#F7C948',
+    filterIcon: {
+        marginRight: 5,
     },
     filterText: {
         color: '#9CA3AF',
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '600',
     },
     filterTextActive: {
         color: '#000',
     },
-    markerContainer: {
-        width: 30,
-        height: 30,
+    // ── Legend ───────────────────────────────────────────────────────────────
+    legend: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+        gap: 14,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    legendDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+    },
+    legendLabel: {
+        color: '#D1D5DB',
+        fontSize: 11,
+        fontWeight: '600',
+    },
+    legendCount: {
+        color: '#6B7280',
+        fontSize: 11,
+        marginLeft: 'auto',
+    },
+    // ── Locate Me FAB ────────────────────────────────────────────────────────
+    locateMeBtn: {
+        position: 'absolute',
+        bottom: 220,
+        right: 16,
+        width: 46,
+        height: 46,
+        borderRadius: 23,
+        backgroundColor: 'rgba(14, 14, 18, 0.92)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.15)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    locateMeBtnActive: {
+        backgroundColor: CLUB_COLOR,
+        borderColor: CLUB_COLOR,
+    },
+    // ── Zoom controls ────────────────────────────────────────────────────────
+    zoomControls: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 180 : (StatusBar.currentHeight ?? 0) + 130,
+        right: 16,
+        backgroundColor: 'rgba(14, 14, 18, 0.92)',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    zoomBtn: {
+        width: 42,
+        height: 42,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    markerDot: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#fff',
-        borderWidth: 2,
-        borderColor: '#F7C948',
+    zoomBtnDisabled: {
+        opacity: 0.4,
     },
-    markerDotActive: {
-        backgroundColor: '#F7C948',
-        borderColor: '#fff',
-        width: 16,
-        height: 16,
-        borderRadius: 8,
-    },
-    markerPulse: {
-        position: 'absolute',
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        backgroundColor: 'rgba(247, 201, 72, 0.4)',
-    },
-    markerPulseActive: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(247, 201, 72, 0.2)',
-    },
-    carouselContainer: {
-        position: 'absolute',
-        bottom: 100,
-        width: width,
-    },
-    carouselContent: {
-        paddingHorizontal: (width - CARD_WIDTH) / 2,
-    },
-    card: {
-        width: CARD_WIDTH,
-        height: 120,
-        backgroundColor: 'rgba(28, 28, 30, 0.98)',
-        marginHorizontal: CARD_MARGIN,
-        borderRadius: 20,
-        flexDirection: 'row',
-        padding: 10,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 15,
-        elevation: 10,
-    },
-    activeCard: {
-        borderColor: '#F7C948',
-    },
-    cardImage: {
-        width: 100,
-        height: '100%',
-        borderRadius: 14,
-    },
-    cardContent: {
-        flex: 1,
-        marginLeft: 15,
-        justifyContent: 'space-between',
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    cardName: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: '700',
-        flex: 1,
-    },
-    cardPrice: {
-        color: '#F7C948',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    cardMeta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginTop: 4,
-    },
-    cardCity: {
-        color: '#9CA3AF',
-        fontSize: 12,
-        marginLeft: 4,
-    },
-    dot: {
-        width: 3,
-        height: 3,
-        borderRadius: 1.5,
-        backgroundColor: '#4B5563',
+    zoomDivider: {
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.1)',
         marginHorizontal: 8,
     },
-    cardCategory: {
+    // ── Popup card ────────────────────────────────────────────────────────────
+    popup: {
+        position: 'absolute',
+        bottom: 90,
+        left: 16,
+        right: 16,
+        backgroundColor: 'rgba(14, 14, 18, 0.97)',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+        elevation: 16,
+        overflow: 'hidden',
+    },
+    popupClose: {
+        position: 'absolute',
+        top: 10,
+        right: 10,
+        zIndex: 10,
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    popupInner: {
+        flexDirection: 'row',
+        padding: 12,
+    },
+    popupImage: {
+        width: 90,
+        height: 110,
+        borderRadius: 14,
+    },
+    popupContent: {
+        flex: 1,
+        marginLeft: 14,
+        justifyContent: 'space-between',
+    },
+    popupBadgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    typeBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    typeBadgeText: {
+        fontSize: 9,
+        fontWeight: '800',
+        letterSpacing: 0.6,
+    },
+    popupDetail: {
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    popupName: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '800',
+        marginTop: 4,
+    },
+    popupMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 2,
+    },
+    popupSubtitle: {
         color: '#9CA3AF',
         fontSize: 12,
     },
-    bookButton: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        paddingVertical: 6,
-        borderRadius: 8,
+    ctaButton: {
+        flexDirection: 'row',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        borderRadius: 10,
+        marginTop: 6,
     },
-    bookButtonText: {
-        color: '#fff',
+    ctaText: {
+        color: '#000',
         fontSize: 12,
-        fontWeight: '600',
-    }
+        fontWeight: '800',
+    },
 });
 
 export default InteractiveMapScreen;

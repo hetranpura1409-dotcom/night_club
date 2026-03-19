@@ -241,26 +241,19 @@ const EventsScreen = ({ navigation }: any) => {
 
             {/* ── City Hero Image (Fixed Background) ───────────────────────── */}
             {(() => {
-                // Use city-specific image or fall back to a dark nightclub bokeh for All Cities
-                const DEFAULT_BG = 'https://wallpaperaccess.com/full/1388735.jpg';
+                const DEFAULT_BG = 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=800&q=80';
                 const heroImg = selectedCity?.image ?? DEFAULT_BG;
                 return (
-                    <View style={[styles.cityHeroContainer, { backgroundColor: '#111', zIndex: 0, elevation: 0 }]}>
-                        <Image
-                            source={{ uri: heroImg }}
-                            style={{ width: '100%', height: '100%', resizeMode: 'cover', opacity: 0.9 }}
+                    <ImageBackground
+                        source={{ uri: heroImg }}
+                        style={[styles.cityHeroContainer, { zIndex: 0, elevation: 0 }]}
+                        resizeMode="cover"
+                    >
+                        <LinearGradient
+                            colors={['rgba(0,0,0,0.1)', '#000000']}
+                            style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%' }}
                         />
-                        <LinearGradient 
-                            colors={['transparent', '#0A0A0A']} 
-                            style={{
-                                position: 'absolute',
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                height: '35%',
-                            }} 
-                        />
-                    </View>
+                    </ImageBackground>
                 );
             })()}
 
@@ -428,7 +421,7 @@ const styles = StyleSheet.create({
         top: 0,
         left: 0,
         right: 0,
-        height: 260, // Fade completes to black right at genre chips
+        height: 175,
     },
 
     // Header
@@ -472,7 +465,7 @@ const styles = StyleSheet.create({
     // Search
     searchSection: {
         paddingHorizontal: 16,
-        paddingTop: 100,
+        paddingTop: 50,
         paddingBottom: 20,
     },
     searchBar: {
