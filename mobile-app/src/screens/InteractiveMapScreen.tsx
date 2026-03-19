@@ -19,7 +19,7 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import { Nightclub } from '../types';
 import BottomNav from '../components/BottomNav';
 import { MOCK_VENUES } from '../data/mockVenues';
-import { MOCK_MAP_EVENTS } from '../data/mockEvents';
+import { MOCK_MAP_EVENTS, MapEvent } from '../data/mockEvents';
 import MAPBOX_ACCESS_TOKEN from '../config/mapbox';
 
 // ── Colors ────────────────────────────────────────────────────────────────────
@@ -111,11 +111,12 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
     const [selectedItem, setSelectedItem]         = useState<MapItem | null>(null);
     const [mapStyle, setMapStyle]                 = useState<string | null>(null);
     const [userLocation, setUserLocation]         = useState<[number, number] | null>(null);
-    const [followUser, setFollowUser]             = useState(true);
     const mapCamera      = useRef<any>(null);
     const popupAnim      = useRef(new Animated.Value(200)).current;
     const pulseAnim      = useRef(new Animated.Value(1)).current;
     const watchId        = useRef<number | null>(null);
+    // Ref (not state) so GPS callback always reads the live value without re-registering watchPosition
+    const followUserRef  = useRef(true);
     // Track zoom in a ref so buttons never trigger a re-render that resets the camera
     const zoomRef        = useRef(5);
     // Keep a separate state just to drive the disabled appearance of zoom buttons
@@ -156,37 +157,32 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                 if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
             }
 
+            // Clear any previous watcher first
+            if (watchId.current !== null) {
+                Geolocation.clearWatch(watchId.current);
+            }
+
             watchId.current = Geolocation.watchPosition(
                 (pos) => {
                     const coords: [number, number] = [pos.coords.longitude, pos.coords.latitude];
                     setUserLocation(coords);
-                    // Auto-follow only on the very first fix (followUser starts true)
-                    // Use animationDuration:0 so GPS updates never cause shaking
-                    if (followUser) {
+                    // followUserRef is a ref so this always reads the live value
+                    if (followUserRef.current) {
+                        followUserRef.current = false; // stop after first fix
                         mapCamera.current?.setCamera({
                             centerCoordinate: coords,
                             zoomLevel: 14,
-                            animationDuration: 0,
+                            animationDuration: 600,
                         });
-                        // Stop auto-follow after first fix so user can pan freely
-                        setFollowUser(false);
                     }
                 },
-                (err) => {
-                    // Silently ignore — user may have denied or GPS unavailable
-                    console.warn('Location watch error:', err.message);
-                },
-                {
-                    enableHighAccuracy: true,
-                    distanceFilter: 5,       // update every 5 metres moved
-                    interval: 3000,
-                    fastestInterval: 1000,
-                }
+                (err) => console.warn('GPS error:', err.message),
+                { enableHighAccuracy: true, distanceFilter: 10, interval: 4000, fastestInterval: 2000 }
             );
         } catch (e) {
-            console.warn('Location permission error:', e);
+            console.warn('Location error:', e);
         }
-    }, [followUser]);
+    }, []);
 
     useEffect(() => {
         requestAndWatch();
@@ -199,6 +195,7 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
 
     // ── Locate Me: re-centre camera and resume following ─────────────────────
     const handleLocateMe = () => {
+        followUserRef.current = false; // tap = one-time jump, not continuous follow
         if (userLocation) {
             zoomRef.current = 15;
             setZoomLevel(15);
@@ -208,9 +205,9 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                 animationDuration: 500,
             });
         } else {
+            followUserRef.current = true; // no fix yet — allow first-fix follow
             requestAndWatch();
         }
-        setFollowUser(false); // manual action — don't auto-follow after this
     };
 
     // Animate popup in/out when selectedItem changes
@@ -230,6 +227,32 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
             }).start();
         }
     }, [selectedItem]);
+
+    // ── When search narrows results: fly camera + auto-select ─────────────────
+    useEffect(() => {
+        if (!searchQuery.trim()) return; // don't fly when search is empty
+        if (filteredItems.length === 0) return;
+
+        const first = filteredItems[0];
+        // Always fly to first result when user is actively searching
+        zoomRef.current = 14;
+        setZoomLevel(14);
+        mapCamera.current?.setCamera({
+            centerCoordinate: [first.longitude, first.latitude],
+            zoomLevel: 14,
+            animationDuration: 700,
+        });
+        // Auto-open the popup for the first match
+        setSelectedItem(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchQuery]);
+
+    // ── Dismiss popup if the selected item is filtered out ────────────────────
+    useEffect(() => {
+        if (selectedItem && !filteredItems.find(i => i.id === selectedItem.id)) {
+            setSelectedItem(null);
+        }
+    }, [filteredItems, selectedItem]);
 
     // ── Build unified list of MapItems ────────────────────────────────────────
     const allItems = useMemo<MapItem[]>(() => {
@@ -469,9 +492,9 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                             id="clubInactive"
                             filter={['!', ['to-boolean', ['get', 'isActive']]]}
                             style={{
-                                circleRadius: 4,
+                                circleRadius: 8,
                                 circleColor: CLUB_COLOR,
-                                circleStrokeWidth: 1,
+                                circleStrokeWidth: 1.5,
                                 circleStrokeColor: CLUB_BORDER,
                                 circlePitchAlignment: 'map',
                             }}
@@ -480,9 +503,9 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                             id="clubActive"
                             filter={['to-boolean', ['get', 'isActive']]}
                             style={{
-                                circleRadius: 6,
+                                circleRadius: 12,
                                 circleColor: CLUB_ACTIVE_COLOR,
-                                circleStrokeWidth: 1.5,
+                                circleStrokeWidth: 2.5,
                                 circleStrokeColor: CLUB_COLOR,
                                 circlePitchAlignment: 'map',
                             }}
@@ -499,9 +522,9 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                             id="eventInactive"
                             filter={['!', ['to-boolean', ['get', 'isActive']]]}
                             style={{
-                                circleRadius: 4,
+                                circleRadius: 8,
                                 circleColor: EVENT_COLOR,
-                                circleStrokeWidth: 1,
+                                circleStrokeWidth: 1.5,
                                 circleStrokeColor: EVENT_BORDER,
                                 circlePitchAlignment: 'map',
                             }}
@@ -510,9 +533,9 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                             id="eventActive"
                             filter={['to-boolean', ['get', 'isActive']]}
                             style={{
-                                circleRadius: 6,
+                                circleRadius: 12,
                                 circleColor: EVENT_ACTIVE_COLOR,
-                                circleStrokeWidth: 1.5,
+                                circleStrokeWidth: 2.5,
                                 circleStrokeColor: EVENT_COLOR,
                                 circlePitchAlignment: 'map',
                             }}
