@@ -110,13 +110,16 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
     const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('all');
     const [selectedItem, setSelectedItem]         = useState<MapItem | null>(null);
     const [mapStyle, setMapStyle]                 = useState<string | null>(null);
-    const [zoomLevel, setZoomLevel]               = useState(5);
     const [userLocation, setUserLocation]         = useState<[number, number] | null>(null);
-    const [followUser, setFollowUser]             = useState(true); // camera follows on first fix
+    const [followUser, setFollowUser]             = useState(true);
     const mapCamera      = useRef<any>(null);
     const popupAnim      = useRef(new Animated.Value(200)).current;
-    const pulseAnim      = useRef(new Animated.Value(1)).current;   // for location dot pulse
+    const pulseAnim      = useRef(new Animated.Value(1)).current;
     const watchId        = useRef<number | null>(null);
+    // Track zoom in a ref so buttons never trigger a re-render that resets the camera
+    const zoomRef        = useRef(5);
+    // Keep a separate state just to drive the disabled appearance of zoom buttons
+    const [zoomLevel, setZoomLevel]               = useState(5);
 
     // Fetch Mapbox style once
     useEffect(() => {
@@ -157,13 +160,16 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                 (pos) => {
                     const coords: [number, number] = [pos.coords.longitude, pos.coords.latitude];
                     setUserLocation(coords);
-                    // Auto-follow until user manually pans
+                    // Auto-follow only on the very first fix (followUser starts true)
+                    // Use animationDuration:0 so GPS updates never cause shaking
                     if (followUser) {
                         mapCamera.current?.setCamera({
                             centerCoordinate: coords,
                             zoomLevel: 14,
-                            animationDuration: 800,
+                            animationDuration: 0,
                         });
+                        // Stop auto-follow after first fix so user can pan freely
+                        setFollowUser(false);
                     }
                 },
                 (err) => {
@@ -193,17 +199,18 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
 
     // ── Locate Me: re-centre camera and resume following ─────────────────────
     const handleLocateMe = () => {
-        setFollowUser(true);
         if (userLocation) {
+            zoomRef.current = 15;
+            setZoomLevel(15);
             mapCamera.current?.setCamera({
                 centerCoordinate: userLocation,
                 zoomLevel: 15,
-                animationDuration: 600,
+                animationDuration: 500,
             });
         } else {
-            // No fix yet — request fresh
             requestAndWatch();
         }
+        setFollowUser(false); // manual action — don't auto-follow after this
     };
 
     // Animate popup in/out when selectedItem changes
@@ -298,10 +305,12 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
     // ── Handlers ──────────────────────────────────────────────────────────────
     const handleMarkerTap = (item: MapItem) => {
         setSelectedItem(item);
+        zoomRef.current = 14;
+        setZoomLevel(14);
         mapCamera.current?.setCamera({
             centerCoordinate: [item.longitude, item.latitude],
             zoomLevel: 14,
-            animationDuration: 700,
+            animationDuration: 600,
         });
     };
 
@@ -339,15 +348,18 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
     const MIN_ZOOM = 2;
 
     const handleZoomIn = () => {
-        const next = Math.min(zoomLevel + 1.5, MAX_ZOOM);
-        setZoomLevel(next);
-        mapCamera.current?.setCamera({ zoomLevel: next, animationDuration: 300 });
+        const next = Math.min(zoomRef.current + 1.5, MAX_ZOOM);
+        zoomRef.current = next;
+        setZoomLevel(next); // only updates button disabled state
+        // No centerCoordinate — camera stays exactly where the user is looking
+        mapCamera.current?.setCamera({ zoomLevel: next, animationDuration: 250 });
     };
 
     const handleZoomOut = () => {
-        const next = Math.max(zoomLevel - 1.5, MIN_ZOOM);
+        const next = Math.max(zoomRef.current - 1.5, MIN_ZOOM);
+        zoomRef.current = next;
         setZoomLevel(next);
-        mapCamera.current?.setCamera({ zoomLevel: next, animationDuration: 300 });
+        mapCamera.current?.setCamera({ zoomLevel: next, animationDuration: 250 });
     };
 
     // ── Camera default ────────────────────────────────────────────────────────
@@ -435,10 +447,15 @@ const InteractiveMapScreen: React.FC<InteractiveMapScreenProps> = ({ navigation 
                     rotateEnabled
                     onTouchStart={() => setFollowUser(false)}
                 >
+                    {/* defaultSettings are applied ONCE on mount only — never reactive.
+                        All subsequent movements go through mapCamera.current.setCamera()
+                        so zoom buttons can never jump back to the initial coordinates. */}
                     <Mapbox.Camera
                         ref={mapCamera}
-                        zoomLevel={zoomLevel}
-                        centerCoordinate={cameraCenter}
+                        defaultSettings={{
+                            centerCoordinate: cameraCenter,
+                            zoomLevel: 5,
+                        }}
                         animationDuration={0}
                     />
 
